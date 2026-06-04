@@ -38,8 +38,10 @@ export const env = {
   SUREPASS_BASE_URL: process.env.SUREPASS_BASE_URL,
   SUREPASS_TOKEN: process.env.SUREPASS_TOKEN,
 
-  ADMIN_EMAIL: process.env.ADMIN_EMAIL,
-  ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
+  ADMIN_EMAIL: process.env.ADMIN_EMAIL || 'admin@example.com',
+  ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || 'change-me-in-production',
+  DEFAULT_USER_EMAIL: process.env.DEFAULT_USER_EMAIL || 'buddy@zentroverse.com',
+  DEFAULT_USER_PASSWORD: process.env.DEFAULT_USER_PASSWORD || 'Zentroflow@2026',
 
   AISENSY_PARTNER_ID: process.env.AISENSY_PARTNER_ID,
   AISENSY_PARTNER_API_KEY: process.env.AISENSY_PARTNER_API_KEY,
