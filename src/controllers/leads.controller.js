@@ -2,9 +2,19 @@ import XLSX from 'xlsx';
 import ImportBatch from '../models/ImportBatch.js';
 import { asyncHandler } from '../middleware/asyncHandler.middleware.js';
 import { ok } from '../helpers/apiResponse.js';
-import { rowsFromWorkbookBuffer, validateRows, attachGeneratedIds, commitImport } from '../services/excelImport.service.js';
+import {
+  rowsFromWorkbookBuffer,
+  validateRows,
+  attachGeneratedIds,
+  commitImport,
+  buildLeadTemplateWorkbook,
+  filterLeadRows,
+} from '../services/excelImport.service.js';
 
-const getRows = (req) => (req.file ? rowsFromWorkbookBuffer(req.file.buffer) : req.body.rows || []);
+const getRows = (req) => {
+  if (req.file) return rowsFromWorkbookBuffer(req.file.buffer);
+  return filterLeadRows(req.body.rows || []);
+};
 
 export const validateImport = asyncHandler(async (req, res) => ok(res, await validateRows(getRows(req))));
 export const generateImportIds = asyncHandler(async (req, res) => ok(res, attachGeneratedIds(getRows(req))));
@@ -16,18 +26,7 @@ export const getLastImport = asyncHandler(async (req, res) => {
 });
 
 export const downloadTemplate = asyncHandler(async (req, res) => {
-  const rows = [{
-    customerName: 'ABC Logistics',
-    mobile: '9988776655',
-    product: 'Tata Ace',
-    requirement: 'Standard',
-    district: 'Chennai',
-    source: 'Walk-in',
-    branch: 'Chennai Central',
-    executive: 'Sales Executive',
-  }];
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Leads');
+  const workbook = buildLeadTemplateWorkbook();
   const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
   res.setHeader('Content-Disposition', 'attachment; filename="zentroflow-leads-template.xlsx"');
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
