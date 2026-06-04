@@ -6,14 +6,26 @@ import { ensureDefaultUser } from './src/services/auth.service.js';
 const startServer = async () => {
   try {
     await connectDB();
-    await ensureDefaultUser();
-    app.listen(env.PORT, () => {
-      console.log(`ZentroFlow API running on port ${env.PORT}`);
-    });
+    console.log('MongoDB connected');
   } catch (error) {
-    console.error('Failed to start server:', error.message);
+    console.error('MongoDB connection failed:', error.message);
     process.exit(1);
   }
+
+  try {
+    await ensureDefaultUser();
+  } catch (error) {
+    console.warn('Default user seed skipped:', error.message);
+  }
+
+  const host = '0.0.0.0';
+  app.listen(env.PORT, host, () => {
+    console.log(`ZentroFlow API running on http://${host}:${env.PORT}`);
+    console.log(`Health: http://${host}:${env.PORT}/health`);
+  });
 };
 
-startServer();
+startServer().catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
+});
