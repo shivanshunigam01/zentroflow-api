@@ -1,5 +1,11 @@
-### Health
+### Root
+GET http://localhost:8787/
+
+### Health (root)
 GET http://localhost:8787/health
+
+### Health (API prefix)
+GET http://localhost:8787/api/v1/health
 
 ### Create customer
 POST http://localhost:8787/api/v1/customers

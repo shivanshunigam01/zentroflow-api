@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit';
 import apiRoutes from './routes/index.js';
 import { corsOptions } from './config/cors.js';
 import { env } from './config/env.js';
-import { dbStatus } from './config/db.js';
+import { sendHealth, sendRoot } from './helpers/healthHandlers.js';
 import { requestId } from './middleware/requestId.middleware.js';
 import { errorHandler, notFound } from './middleware/errorHandler.middleware.js';
 
@@ -20,7 +20,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestId);
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }));
 
-app.get('/health', (req, res) => res.json({ status: 'ok', db: dbStatus() }));
+app.get('/', sendRoot);
+app.get('/health', sendHealth);
 app.use(env.API_PREFIX, apiRoutes);
 app.use(notFound);
 app.use(errorHandler);

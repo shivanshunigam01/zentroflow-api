@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { sendHealth } from '../helpers/healthHandlers.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import authRoutes from './auth.routes.js';
 import bootstrapRoutes from './bootstrap.routes.js';
@@ -14,9 +15,7 @@ import accessRoutes from './access.routes.js';
 
 const router = Router();
 
-router.get('/health', (req, res) =>
-  res.json({ data: { status: 'ok' }, meta: { correlation_id: res.locals.correlationId } }),
-);
+router.get('/health', sendHealth);
 
 router.use('/auth', authRoutes);
 router.use('/bootstrap', bootstrapRoutes);
