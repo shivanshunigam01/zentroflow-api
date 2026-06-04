@@ -16,7 +16,9 @@ const getRows = (req) => {
   return filterLeadRows(req.body.rows || []);
 };
 
-export const validateImport = asyncHandler(async (req, res) => ok(res, await validateRows(getRows(req))));
+export const validateImport = asyncHandler(async (req, res) => {
+  ok(res, await validateRows(getRows(req), { summaryOnly: true }));
+});
 export const generateImportIds = asyncHandler(async (req, res) => ok(res, attachGeneratedIds(getRows(req))));
 export const importLeads = asyncHandler(async (req, res) => ok(res.status(201), await commitImport({ rows: getRows(req), imported_by: req.body.imported_by || req.user?.name || 'System', correlation_id: res.locals.correlationId })));
 

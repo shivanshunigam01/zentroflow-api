@@ -7,6 +7,9 @@ import { generateIds } from './idGeneration.service.js';
 import { normalizeMobile, isValidMobile } from '../helpers/mobile.js';
 import { publishEvent } from './event.service.js';
 
+const DB_IN_CHUNK = 2000;
+const SAMPLE_ROW_LIMIT = 40;
+
 const normalizeHeader = (h) => String(h).trim().toLowerCase();
 
 const coerceMobile = (value) => {
@@ -38,7 +41,7 @@ export const rowsFromWorkbookBuffer = (buffer) => {
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const sheet = selectImportSheet(workbook);
   const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-  return json.map(normalizeRow).filter((r) => isValidMobile(r.mobile));
+  return json.map(normalizeRow);
 };
 
 export const normalizeRow = (row) => ({
@@ -95,18 +98,32 @@ const isLeadPayloadRow = (row) => isValidMobile(normalizeRow(row).mobile);
 
 export const filterLeadRows = (rows = []) => rows.filter(isLeadPayloadRow);
 
-/** Unique mobile = importable; mobile already in DB or repeated in file = duplicate. */
-export const validateRows = async (rows = []) => {
-  const leadRows = filterLeadRows(rows).map((row) => applyImportDefaults(normalizeRow(row)));
-  const output = [];
+/** One DB query (chunked) instead of per-row lookups. */
+const fetchExistingMobileSet = async (mobileNorms) => {
+  const existing = new Set();
+  for (let i = 0; i < mobileNorms.length; i += DB_IN_CHUNK) {
+    const chunk = mobileNorms.slice(i, i + DB_IN_CHUNK);
+    const docs = await Customer.find(
+      { mobile_normalized: { $in: chunk } },
+      { mobile_normalized: 1 },
+    ).lean();
+    for (const doc of docs) existing.add(doc.mobile_normalized);
+  }
+  return existing;
+};
+
+/**
+ * Classify rows for validate/import. Returns valid rows for commit + summary counts.
+ */
+export const classifyImportRows = async (rows = []) => {
+  const leadRows = rows.map((row) => applyImportDefaults(normalizeRow(row)));
   const seenInFile = new Set();
-  let valid = 0;
-  let invalid = 0;
-  let duplicate = 0;
+  const normsForDb = [];
+  const staged = [];
 
   for (const raw of leadRows) {
-    const errors = [];
     const mobileNorm = normalizeMobile(raw.mobile);
+    const errors = [];
 
     if (!isValidMobile(raw.mobile)) {
       errors.push('valid Indian mobile is required');
@@ -114,26 +131,73 @@ export const validateRows = async (rows = []) => {
       errors.push('duplicate mobile in file');
     } else {
       seenInFile.add(mobileNorm);
-      const existing = await Customer.findOne({ mobile_normalized: mobileNorm }).lean();
-      if (existing) errors.push('mobile already registered');
+      normsForDb.push(mobileNorm);
+    }
+
+    staged.push({ raw, mobileNorm, errors });
+  }
+
+  const existingInDb = await fetchExistingMobileSet(normsForDb);
+
+  const allRows = [];
+  const validRows = [];
+  const rejectedRows = [];
+  let valid = 0;
+  let invalid = 0;
+  let duplicate = 0;
+
+  for (const { raw, mobileNorm, errors: baseErrors } of staged) {
+    const errors = [...baseErrors];
+    if (!errors.length && existingInDb.has(mobileNorm)) {
+      errors.push('mobile already registered');
     }
 
     const isDup = errors.some((e) => e.includes('duplicate') || e.includes('already registered'));
     const isInvalid = errors.some((e) => e.includes('valid Indian mobile'));
-
-    if (isInvalid) invalid += 1;
-    else if (isDup) duplicate += 1;
-    else valid += 1;
-
-    output.push({
+    const rowOut = {
       ...raw,
+      mobile_normalized: mobileNorm,
       valid: !errors.length,
       duplicate: isDup,
       errors: errors.length ? errors : undefined,
-    });
+    };
+
+    allRows.push(rowOut);
+    if (isInvalid) invalid += 1;
+    else if (isDup) duplicate += 1;
+    else {
+      valid += 1;
+      validRows.push(rowOut);
+    }
+    if (errors.length) rejectedRows.push(rowOut);
   }
 
-  return { total: leadRows.length, valid, duplicate, invalid, outOfTerritory: 0, rows: output };
+  const sampleRows = rejectedRows.slice(0, SAMPLE_ROW_LIMIT);
+
+  return {
+    total: leadRows.length,
+    valid,
+    duplicate,
+    invalid,
+    outOfTerritory: 0,
+    validRows,
+    rejectedRows,
+    allRows,
+    sampleRows,
+  };
+};
+
+/** Fast validate — summary counts + small sample of problem rows only. */
+export const validateRows = async (rows = [], { summaryOnly = true } = {}) => {
+  const result = await classifyImportRows(rows);
+  return {
+    total: result.total,
+    valid: result.valid,
+    duplicate: result.duplicate,
+    invalid: result.invalid,
+    outOfTerritory: result.outOfTerritory,
+    rows: summaryOnly ? result.sampleRows : result.allRows,
+  };
 };
 
 export const attachGeneratedIds = (rows = []) => filterLeadRows(rows).map((row) => {
@@ -149,18 +213,20 @@ export const attachGeneratedIds = (rows = []) => filterLeadRows(rows).map((row) 
 
 export const commitImport = async ({ rows = [], imported_by = 'System', correlation_id }) => {
   const prepared = attachGeneratedIds(rows);
-  const validation = await validateRows(prepared);
+  const classified = await classifyImportRows(prepared);
   let imported = 0;
-  const rejectedRows = [];
   const session = await mongoose.startSession();
+
   await session.withTransaction(async () => {
-    for (const row of validation.rows) {
-      if (!row.valid) {
-        rejectedRows.push(row);
-        continue;
-      }
+    const validMobiles = classified.validRows.map((r) => normalizeMobile(r.mobile));
+    const existingCustomers = await Customer.find({
+      mobile_normalized: { $in: validMobiles },
+    }).session(session).lean();
+    const customerByMobile = new Map(existingCustomers.map((c) => [c.mobile_normalized, c]));
+
+    for (const row of classified.validRows) {
       const mobile_normalized = normalizeMobile(row.mobile);
-      let customer = await Customer.findOne({ mobile_normalized }).session(session);
+      let customer = customerByMobile.get(mobile_normalized);
       if (!customer) {
         customer = await Customer.create([{
           customer_id: row.customerId,
@@ -170,7 +236,9 @@ export const commitImport = async ({ rows = [], imported_by = 'System', correlat
           address: row.district || undefined,
           customer_type: 'Individual',
         }], { session }).then(([doc]) => doc);
+        customerByMobile.set(mobile_normalized, customer);
       }
+
       const opportunity = await Opportunity.create([{
         opportunity_id: row.opportunityId,
         lead_id: row.leadId,
@@ -182,25 +250,43 @@ export const commitImport = async ({ rows = [], imported_by = 'System', correlat
         branch: row.branch,
         escalation_owner: 'Sales Manager',
       }], { session }).then(([doc]) => doc);
-      await publishEvent({
+
+      void publishEvent({
         type: 'lead.created',
         opportunity_id: opportunity.opportunity_id,
         customer_id: customer.customer_id,
         payload: row,
         correlation_id,
       });
+
       imported += 1;
     }
+
     await ImportBatch.create([{
-      ...validation,
+      total: classified.total,
+      valid: classified.valid,
+      duplicate: classified.duplicate,
+      invalid: classified.invalid,
+      outOfTerritory: 0,
       imported,
-      rejected: rejectedRows.length,
-      rows: rejectedRows,
+      rejected: classified.rejectedRows.length,
+      rows: classified.sampleRows,
       imported_by,
     }], { session });
   });
+
   await session.endSession();
-  return { ...validation, imported, rejected: rejectedRows.length, rows: rejectedRows };
+
+  return {
+    total: classified.total,
+    valid: classified.valid,
+    duplicate: classified.duplicate,
+    invalid: classified.invalid,
+    outOfTerritory: 0,
+    imported,
+    rejected: classified.rejectedRows.length,
+    rows: classified.sampleRows,
+  };
 };
 
 /** Standard upload template headers (row 1 in Excel). */
