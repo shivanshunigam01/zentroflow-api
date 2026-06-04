@@ -1,15 +1,10 @@
-/**
- * Global CORS — all origins, no credentials (JWT in Authorization header).
- * Frontend: https://zentroverse-automation.vercel.app
- * Backend: https://flow.zentroverse.com
- */
+/** Single CORS policy — do not add Access-Control-* headers in nginx (causes duplicates). */
 export const corsOptions = {
-  origin: true,
+  origin: '*',
   credentials: false,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
   exposedHeaders: ['Content-Disposition'],
   maxAge: 86400,
-  preflightContinue: false,
   optionsSuccessStatus: 204,
 };

@@ -52,6 +52,31 @@ location / {
 
 Then: `sudo nginx -t && sudo systemctl reload nginx`
 
+## CORS duplicate headers (browser blocks API)
+
+If you see **two** `Access-Control-Allow-Origin` values (e.g. your Vercel URL **and** `*`), nginx is adding CORS **and** Express is too.
+
+**Remove CORS from nginx** — let Node handle it only:
+
+```nginx
+# DELETE lines like these from your site config:
+# add_header Access-Control-Allow-Origin *;
+# add_header Access-Control-Allow-Methods ...;
+# add_header Access-Control-Allow-Headers ...;
+```
+
+Reload nginx after editing.
+
+Verify one header only:
+
+```bash
+curl -I -X OPTIONS "https://flow.zentroverse.com/api/v1/auth/login" \
+  -H "Origin: https://zentroverse-automation.vercel.app" \
+  -H "Access-Control-Request-Method: POST"
+```
+
+Expect a **single** `Access-Control-Allow-Origin: *`
+
 ## Common crash causes
 
 | Error in `pm2 logs` | Fix |

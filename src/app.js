@@ -12,16 +12,11 @@ import { errorHandler, notFound } from './middleware/errorHandler.middleware.js'
 
 const app = express();
 
-const corsMiddleware = cors(corsOptions);
+// Behind nginx — required for express-rate-limit + X-Forwarded-For
+app.set('trust proxy', 1);
 
-// CORS first — before helmet, routes, and rate limit (preflight must succeed)
-app.use(corsMiddleware);
-app.options('*', corsMiddleware);
-
-app.use((req, res, next) => {
-  console.log('Origin:', req.headers.origin);
-  next();
-});
+// CORS once, before everything else (no manual Access-Control-* headers elsewhere)
+app.use(cors(corsOptions));
 
 app.use(
   helmet({
@@ -33,7 +28,15 @@ app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestId);
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }));
+
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 500,
+    standardHeaders: true,
+    legacyHeaders: false,
+  }),
+);
 
 app.get('/', sendRoot);
 app.get('/health', sendHealth);
