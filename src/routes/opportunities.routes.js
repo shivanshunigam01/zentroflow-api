@@ -1,0 +1,14 @@
+import { Router } from 'express';
+import { actionValidator, createOpportunityValidator, listOpportunityValidator, opportunityIdValidator, stageTransitionValidator } from '../validators/opportunity.validator.js';
+import { validate } from '../middleware/validate.middleware.js';
+import { createOpportunity, getActivities, getOpportunity, getStageHistory, listOpportunities, runAction, stageTransition, updateOpportunity } from '../controllers/opportunities.controller.js';
+const router = Router();
+router.get('/', listOpportunityValidator, validate, listOpportunities);
+router.post('/', createOpportunityValidator, validate, createOpportunity);
+router.get('/:opportunityId', opportunityIdValidator, validate, getOpportunity);
+router.patch('/:opportunityId', opportunityIdValidator, validate, updateOpportunity);
+router.post('/:opportunityId/stage-transition', opportunityIdValidator, stageTransitionValidator, validate, stageTransition);
+router.post('/:opportunityId/actions', opportunityIdValidator, actionValidator, validate, runAction);
+router.get('/:opportunityId/activities', opportunityIdValidator, validate, getActivities);
+router.get('/:opportunityId/stage-history', opportunityIdValidator, validate, getStageHistory);
+export default router;

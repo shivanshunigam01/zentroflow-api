@@ -1,0 +1,62 @@
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+
+const buildMongoUri = () => {
+  if (process.env.MONGODB_URI) return process.env.MONGODB_URI;
+  const user = process.env.MONGODB_USER;
+  const password = process.env.MONGODB_PASSWORD;
+  const host = process.env.MONGODB_HOST;
+  const db = process.env.MONGODB_DB || 'zentroverse';
+  if (user && password && host) {
+    const encoded = encodeURIComponent(password);
+    return `mongodb+srv://${user}:${encoded}@${host}/${db}?authSource=admin&retryWrites=true&w=majority`;
+  }
+  return 'mongodb://127.0.0.1:27017/zentroflow';
+};
+
+export const env = {
+  NODE_ENV: process.env.NODE_ENV || 'development',
+  PORT: Number(process.env.PORT || process.env.RAZORPAY_API_PORT || 5000),
+  MONGODB_URI: buildMongoUri(),
+  API_PREFIX: process.env.API_PREFIX || '/api/v1',
+  CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  JWT_SECRET: process.env.JWT_SECRET || 'change-me-in-production',
+  DUPLICATE_WINDOW_DAYS: Number(process.env.DUPLICATE_WINDOW_DAYS || 30),
+
+  MONGODB_USER: process.env.MONGODB_USER,
+  MONGODB_PASSWORD: process.env.MONGODB_PASSWORD,
+  MONGODB_HOST: process.env.MONGODB_HOST,
+  MONGODB_DB: process.env.MONGODB_DB || 'zentroverse',
+
+  RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID,
+  RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET,
+
+  SUREPASS_BASE_URL: process.env.SUREPASS_BASE_URL,
+  SUREPASS_TOKEN: process.env.SUREPASS_TOKEN,
+
+  ADMIN_EMAIL: process.env.ADMIN_EMAIL,
+  ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
+
+  AISENSY_PARTNER_ID: process.env.AISENSY_PARTNER_ID,
+  AISENSY_PARTNER_API_KEY: process.env.AISENSY_PARTNER_API_KEY,
+  AISENSY_SHARED_SECRET: process.env.AISENSY_SHARED_SECRET,
+  AISENSY_PARTNER_PLAN_FAMILY_ID: process.env.AISENSY_PARTNER_PLAN_FAMILY_ID,
+  AISENSY_PLAN_FAMILY_ID: process.env.AISENSY_PLAN_FAMILY_ID,
+};
+
+export const validateEnv = () => {
+  if (!env.MONGODB_URI) throw new Error('MONGODB_URI is required');
+  if (!env.CORS_ORIGIN) throw new Error('CORS_ORIGIN is required');
+};
+
+/** For startup logs — never log credentials */
+export const mongoTargetLabel = () => {
+  const uri = env.MONGODB_URI;
+  if (uri.includes('127.0.0.1') || uri.includes('localhost')) return 'local MongoDB';
+  const match = uri.match(/@([^/]+)/);
+  return match ? `Atlas (${match[1]})` : 'remote MongoDB';
+};

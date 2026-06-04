@@ -1,0 +1,65 @@
+### Health
+GET http://localhost:8787/health
+
+### Create customer
+POST http://localhost:8787/api/v1/customers
+Content-Type: application/json
+
+{
+  "name": "ABC Logistics",
+  "mobile": "9988776655",
+  "email": "ops@abc.in",
+  "address": "Chennai"
+}
+
+### List opportunities
+GET http://localhost:8787/api/v1/opportunities?page=1&limit=20
+
+### Validate import (JSON rows — no file)
+POST http://localhost:8787/api/v1/leads/import/validate
+Content-Type: application/json
+
+{
+  "rows": [
+    {
+      "customerName": "ABC Logistics",
+      "mobile": "9988776655",
+      "product": "Tata Ace",
+      "requirement": "Standard",
+      "district": "Chennai",
+      "source": "Walk-in",
+      "branch": "Chennai Central",
+      "executive": "Sales Executive"
+    }
+  ]
+}
+
+### Generate IDs (JSON)
+POST http://localhost:8787/api/v1/leads/import/generate-ids
+Content-Type: application/json
+
+{
+  "rows": [
+    {
+      "customerName": "ABC Logistics",
+      "mobile": "9988776655",
+      "product": "Tata Ace",
+      "requirement": "Standard"
+    }
+  ]
+}
+
+### Last import batch
+GET http://localhost:8787/api/v1/leads/import/latest
+
+### Download template
+GET http://localhost:8787/api/v1/leads/import/template
+
+### Stage action (after an opportunity exists)
+# POST http://localhost:8787/api/v1/opportunities/{{opportunityId}}/actions
+# Content-Type: application/json
+#
+# {
+#   "action_label": "Complete Contact",
+#   "changed_by": "Sales Executive"
+# }

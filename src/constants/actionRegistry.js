@@ -1,0 +1,73 @@
+/**
+ * Stage-changing actions — aligned with zentroverse-buddy/src/domain/actions/action-registry.ts
+ * Only entries with microStage (or macro cross-moves) are listed for POST .../actions
+ */
+export const ACTION_REGISTRY = {
+  'Move to C1': { microStage: 'C1.1' },
+  'Move to C1A': { microStage: 'C1A.1' },
+  'Move to C2': { microStage: 'C2.1' },
+  'Move to C3': { microStage: 'C3.1' },
+  'Activate Lifecycle': { microStage: 'L1' },
+
+  'Complete Contact': { microStage: 'C0.2' },
+  'Save Discovery': { microStage: 'C0.3' },
+  'Mark Qualified': { microStage: 'C0.4' },
+  'Lock Variant': { microStage: 'C0.5' },
+  'Confirm Budget': { microStage: 'C0.6' },
+  'Add Competitor Offer': { microStage: 'C0.7' },
+  'Schedule Demo': { microStage: 'C0.8' },
+  'Confirm Authority': { microStage: 'C0.9' },
+  'Pass Score Gate': { microStage: 'C0.10' },
+  'Accept Action': { microStage: 'C0.10' },
+
+  'Create Quote': { microStage: 'C1.2' },
+  'Send Quote': { microStage: 'C1.2' },
+  'Capture Objection': { microStage: 'C1.3' },
+  'Check Affordability': { microStage: 'C1.4' },
+  'Escalate Manager': { microStage: 'C1.7' },
+
+  'Upload Docs': { microStage: 'C1A.2' },
+  'Verify Docs': { microStage: 'C1A.3' },
+  'Assign FI': { microStage: 'C1A.4' },
+  'Update FI Result': { microStage: 'C1A.5' },
+  'Mark Approved': { microStage: 'C1A.6' },
+  'Mark Rejected': { microStage: 'C1A.5', status: 'Lost' },
+  'Alternate Finance': { microStage: 'C1A.5' },
+  'Move Alternate Finance': { microStage: 'C1A.5' },
+  'Confirm Margin': { microStage: 'C1A.7' },
+  'Finalize Add-ons': { microStage: 'C1A.9' },
+  'Confirm Booking Intent': { microStage: 'C1A.10' },
+
+  'Create Booking': { microStage: 'C2.2' },
+  'Allocate Vehicle': { microStage: 'C2.3' },
+  'Lock Booking Variant': { microStage: 'C2.4' },
+  'Upload Billing Docs': { microStage: 'C2.5' },
+  'Update Disbursement': { microStage: 'C2.6' },
+  'Collect Down Payment': { microStage: 'C2.7' },
+  'Create Insurance': { microStage: 'C2.8' },
+  'Start Registration': { microStage: 'C2.9' },
+  'Update HSRP': { microStage: 'C2.10' },
+
+  'Confirm Payment': { microStage: 'C3.2' },
+  'Verify Insurance': { microStage: 'C3.3' },
+  'Verify Registration': { microStage: 'C3.4' },
+  'Approve PDI': { microStage: 'C3.5' },
+  'Mark Vehicle Ready': { microStage: 'C3.6' },
+  'Complete Delivery': { microStage: 'C3.7', status: 'Delivered' },
+  'Send Feedback Link': { microStage: 'C3.8' },
+  'Capture Testimonial': { microStage: 'C3.9' },
+  'Ask Referral': { microStage: 'C3.10' },
+
+  'Move to Nurture': { status: 'Hold' },
+  'Mark Invalid': { status: 'Lost' },
+  'Reopen Old Lead': { status: 'Open' },
+  'Move Dormant': { status: 'Hold' },
+  'Mark Lost': { status: 'Lost' },
+  'Reopen Lead': { status: 'Open' },
+  'Start Nurture Campaign': { status: 'Hold' },
+
+  'Create Service Task': { microStage: 'L1' },
+  'Create Renewal Lead': { microStage: 'L2' },
+  'Create Upgrade Opportunity': { microStage: 'L4' },
+  'Create Exchange Lead': { microStage: 'L5' },
+};
