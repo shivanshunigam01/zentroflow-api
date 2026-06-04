@@ -1,7 +1,11 @@
+import http from 'http';
 import app from './src/app.js';
 import { connectDB } from './src/config/db.js';
 import { env } from './src/config/env.js';
 import { ensureDefaultUser } from './src/services/auth.service.js';
+
+/** 10 minutes — large Excel import/validate (nginx must match proxy_read_timeout). */
+const HTTP_TIMEOUT_MS = 600000;
 
 const startServer = async () => {
   try {
@@ -19,9 +23,16 @@ const startServer = async () => {
   }
 
   const host = '0.0.0.0';
-  app.listen(env.PORT, host, () => {
+  const server = http.createServer(app);
+  server.requestTimeout = HTTP_TIMEOUT_MS;
+  server.headersTimeout = HTTP_TIMEOUT_MS + 10000;
+  server.keepAliveTimeout = HTTP_TIMEOUT_MS + 10000;
+  server.timeout = HTTP_TIMEOUT_MS;
+
+  server.listen(env.PORT, host, () => {
     console.log(`ZentroFlow API running on http://${host}:${env.PORT}`);
     console.log(`Health: http://${host}:${env.PORT}/health`);
+    console.log(`HTTP timeout: ${HTTP_TIMEOUT_MS / 1000}s (large imports)`);
   });
 };
 

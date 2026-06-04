@@ -4,16 +4,18 @@ import { downloadTemplate, generateImportIds, getLastImport, importLeads, valida
 import { validate } from '../middleware/validate.middleware.js';
 import { optionalExcelUpload } from '../middleware/optionalUpload.middleware.js';
 import { importRowsValidator } from '../validators/import.validator.js';
+import { longRunningRequest } from '../middleware/longRunning.middleware.js';
 
 const router = Router();
 
 const importLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, message: { success: false, error: { code: 'RATE_LIMIT', message: 'Too many import requests' } } });
+const longImport = longRunningRequest(600000);
 
 router.get('/import/template', downloadTemplate);
 
-router.post('/import/validate', optionalExcelUpload, importRowsValidator, validate, validateImport);
-router.post('/import/generate-ids', optionalExcelUpload, importRowsValidator, validate, generateImportIds);
-router.post('/import', importLimiter, optionalExcelUpload, importRowsValidator, validate, importLeads);
+router.post('/import/validate', longImport, optionalExcelUpload, importRowsValidator, validate, validateImport);
+router.post('/import/generate-ids', longImport, optionalExcelUpload, importRowsValidator, validate, generateImportIds);
+router.post('/import', longImport, importLimiter, optionalExcelUpload, importRowsValidator, validate, importLeads);
 router.get('/import/latest', getLastImport);
 
 export default router;

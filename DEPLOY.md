@@ -52,6 +52,38 @@ location / {
 
 Then: `sudo nginx -t && sudo systemctl reload nginx`
 
+## Fix 504 Gateway Timeout (large Excel import)
+
+A **504** during **Validate** or **Import** means **nginx closed the connection** before Node finished (default ~60s). Large files (900+ rows) need longer limits.
+
+Edit your nginx site for `flow.zentroverse.com`:
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8787;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    client_max_body_size 25M;
+    proxy_connect_timeout 600s;
+    proxy_send_timeout 600s;
+    proxy_read_timeout 600s;
+    send_timeout 600s;
+}
+```
+
+Then:
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+pm2 restart zentroflow-api --update-env
+```
+
+The API also uses a **10 minute** HTTP timeout (`server.js`). Import uses **bulk insert** (faster than one row at a time).
+
 ## CORS duplicate headers (browser blocks API)
 
 If you see **two** `Access-Control-Allow-Origin` values (e.g. your Vercel URL **and** `*`), nginx is adding CORS **and** Express is too.

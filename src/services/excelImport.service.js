@@ -211,56 +211,65 @@ export const attachGeneratedIds = (rows = []) => filterLeadRows(rows).map((row) 
   };
 });
 
+const BULK_INSERT_CHUNK = 250;
+
+const insertInChunks = async (Model, docs, session) => {
+  for (let i = 0; i < docs.length; i += BULK_INSERT_CHUNK) {
+    const chunk = docs.slice(i, i + BULK_INSERT_CHUNK);
+    if (chunk.length) await Model.insertMany(chunk, { session, ordered: false });
+  }
+};
+
 export const commitImport = async ({ rows = [], imported_by = 'System', correlation_id }) => {
   const prepared = attachGeneratedIds(rows);
   const classified = await classifyImportRows(prepared);
+  const validRows = classified.validRows;
   let imported = 0;
   const session = await mongoose.startSession();
 
   await session.withTransaction(async () => {
-    const validMobiles = classified.validRows.map((r) => normalizeMobile(r.mobile));
-    const existingCustomers = await Customer.find({
-      mobile_normalized: { $in: validMobiles },
-    }).session(session).lean();
+    const validMobiles = validRows.map((r) => normalizeMobile(r.mobile));
+    const existingCustomers = validMobiles.length
+      ? await Customer.find({ mobile_normalized: { $in: validMobiles } }).session(session).lean()
+      : [];
     const customerByMobile = new Map(existingCustomers.map((c) => [c.mobile_normalized, c]));
 
-    for (const row of classified.validRows) {
+    const customersToInsert = [];
+    for (const row of validRows) {
       const mobile_normalized = normalizeMobile(row.mobile);
-      let customer = customerByMobile.get(mobile_normalized);
-      if (!customer) {
-        customer = await Customer.create([{
-          customer_id: row.customerId,
-          name: row.customerName,
-          mobile: row.mobile,
-          mobile_normalized,
-          address: row.district || undefined,
-          customer_type: 'Individual',
-        }], { session }).then(([doc]) => doc);
-        customerByMobile.set(mobile_normalized, customer);
-      }
+      if (customerByMobile.has(mobile_normalized)) continue;
+      const doc = {
+        customer_id: row.customerId,
+        name: row.customerName,
+        mobile: String(row.mobile),
+        mobile_normalized,
+        address: row.district || undefined,
+        customer_type: 'Individual',
+      };
+      customersToInsert.push(doc);
+      customerByMobile.set(mobile_normalized, doc);
+    }
 
-      const opportunity = await Opportunity.create([{
+    await insertInChunks(Customer, customersToInsert, session);
+
+    const opportunitiesToInsert = validRows.map((row) => {
+      const mobile_normalized = normalizeMobile(row.mobile);
+      const customer = customerByMobile.get(mobile_normalized);
+      return {
         opportunity_id: row.opportunityId,
         lead_id: row.leadId,
         customer_id: customer.customer_id,
         product: row.product,
-        requirement: row.requirement,
+        requirement: row.requirement || undefined,
         current_owner: row.executive,
         source: row.source,
         branch: row.branch,
         escalation_owner: 'Sales Manager',
-      }], { session }).then(([doc]) => doc);
+      };
+    });
 
-      void publishEvent({
-        type: 'lead.created',
-        opportunity_id: opportunity.opportunity_id,
-        customer_id: customer.customer_id,
-        payload: row,
-        correlation_id,
-      });
-
-      imported += 1;
-    }
+    await insertInChunks(Opportunity, opportunitiesToInsert, session);
+    imported = validRows.length;
 
     await ImportBatch.create([{
       total: classified.total,
@@ -276,6 +285,14 @@ export const commitImport = async ({ rows = [], imported_by = 'System', correlat
   });
 
   await session.endSession();
+
+  if (imported > 0) {
+    void publishEvent({
+      type: 'import.batch.completed',
+      payload: { imported, imported_by },
+      correlation_id,
+    });
+  }
 
   return {
     total: classified.total,
