@@ -12,8 +12,23 @@ import { errorHandler, notFound } from './middleware/errorHandler.middleware.js'
 
 const app = express();
 
-app.use(helmet());
-app.use(cors(corsOptions));
+const corsMiddleware = cors(corsOptions);
+
+// CORS first — before helmet, routes, and rate limit (preflight must succeed)
+app.use(corsMiddleware);
+app.options('*', corsMiddleware);
+
+app.use((req, res, next) => {
+  console.log('Origin:', req.headers.origin);
+  next();
+});
+
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginEmbedderPolicy: false,
+  }),
+);
 app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

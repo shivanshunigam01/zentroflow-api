@@ -50,7 +50,6 @@ export const env = {
 
 export const validateEnv = () => {
   if (!env.MONGODB_URI) throw new Error('MONGODB_URI is required');
-  if (!env.CORS_ORIGIN) throw new Error('CORS_ORIGIN is required');
 };
 
 /** For startup logs — never log credentials */
