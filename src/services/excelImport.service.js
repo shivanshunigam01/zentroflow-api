@@ -5,16 +5,20 @@ import Opportunity from '../models/Opportunity.js';
 import ImportBatch from '../models/ImportBatch.js';
 import { generateIds } from './idGeneration.service.js';
 import { normalizeMobile, isValidMobile } from '../helpers/mobile.js';
-import { classifyDuplicate } from './duplicate.service.js';
 import { publishEvent } from './event.service.js';
 
 const normalizeHeader = (h) => String(h).trim().toLowerCase();
+
+const coerceMobile = (value) => {
+  if (value == null || value === '') return '';
+  return String(value).trim();
+};
 
 const sheetHasLeadColumns = (sheet) => {
   const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
   if (!json.length) return false;
   const keys = Object.keys(json[0]).map(normalizeHeader);
-  return keys.some((k) => ['mobile', 'phone', 'mobile number'].includes(k));
+  return keys.some((k) => ['mobile', 'phone', 'mobile number', 'customername', 'customer name'].includes(k));
 };
 
 const selectImportSheet = (workbook) => {
@@ -40,17 +44,19 @@ export const rowsFromWorkbookBuffer = (buffer) => {
 export const normalizeRow = (row) => ({
   customerName:
     row.customerName
+    || row.customername
     || row['Customer Name']
     || row.name
     || row.Name
     || row.customer
     || row.Customer,
-  mobile:
+  mobile: coerceMobile(
     row.mobile
     || row.Mobile
     || row.phone
     || row.Phone
     || row['Mobile Number'],
+  ),
   product:
     row.product
     || row.Product
@@ -69,7 +75,7 @@ export const normalizeRow = (row) => ({
 
 /** Only valid mobile required; name/product get defaults when missing. */
 export const applyImportDefaults = (row) => {
-  const mobile = String(row.mobile || '').trim();
+  const mobile = coerceMobile(row.mobile);
   const mobileNorm = normalizeMobile(mobile);
   const customerName = String(row.customerName || '').trim() || `Lead ${mobileNorm}`;
   const product = String(row.product || '').trim() || 'General';
@@ -89,32 +95,44 @@ const isLeadPayloadRow = (row) => isValidMobile(normalizeRow(row).mobile);
 
 export const filterLeadRows = (rows = []) => rows.filter(isLeadPayloadRow);
 
+/** Unique mobile = importable; mobile already in DB or repeated in file = duplicate. */
 export const validateRows = async (rows = []) => {
   const leadRows = filterLeadRows(rows).map((row) => applyImportDefaults(normalizeRow(row)));
   const output = [];
+  const seenInFile = new Set();
   let valid = 0;
   let invalid = 0;
   let duplicate = 0;
+
   for (const raw of leadRows) {
     const errors = [];
-    if (!isValidMobile(raw.mobile)) errors.push('valid Indian mobile is required');
-    let isDuplicate = false;
-    if (!errors.length) {
-      const customer = await Customer.findOne({ mobile_normalized: normalizeMobile(raw.mobile) });
-      if (customer) {
-        const dup = await classifyDuplicate({
-          customer_id: customer.customer_id,
-          product: raw.product,
-          requirement: raw.requirement,
-        });
-        isDuplicate = dup.duplicate;
-      }
+    const mobileNorm = normalizeMobile(raw.mobile);
+
+    if (!isValidMobile(raw.mobile)) {
+      errors.push('valid Indian mobile is required');
+    } else if (seenInFile.has(mobileNorm)) {
+      errors.push('duplicate mobile in file');
+    } else {
+      seenInFile.add(mobileNorm);
+      const existing = await Customer.findOne({ mobile_normalized: mobileNorm }).lean();
+      if (existing) errors.push('mobile already registered');
     }
-    if (errors.length) invalid += 1;
-    else if (isDuplicate) duplicate += 1;
+
+    const isDup = errors.some((e) => e.includes('duplicate') || e.includes('already registered'));
+    const isInvalid = errors.some((e) => e.includes('valid Indian mobile'));
+
+    if (isInvalid) invalid += 1;
+    else if (isDup) duplicate += 1;
     else valid += 1;
-    output.push({ ...raw, valid: !errors.length && !isDuplicate, duplicate: isDuplicate, errors });
+
+    output.push({
+      ...raw,
+      valid: !errors.length,
+      duplicate: isDup,
+      errors: errors.length ? errors : undefined,
+    });
   }
+
   return { total: leadRows.length, valid, duplicate, invalid, outOfTerritory: 0, rows: output };
 };
 
@@ -149,7 +167,7 @@ export const commitImport = async ({ rows = [], imported_by = 'System', correlat
           name: row.customerName,
           mobile: row.mobile,
           mobile_normalized,
-          address: row.district,
+          address: row.district || undefined,
           customer_type: 'Individual',
         }], { session }).then(([doc]) => doc);
       }
@@ -187,33 +205,25 @@ export const commitImport = async ({ rows = [], imported_by = 'System', correlat
 
 /** Standard upload template headers (row 1 in Excel). */
 export const LEAD_TEMPLATE_HEADERS = [
-  'Customer Name',
-  'Mobile',
-  'Alternate Mobile',
-  'Email',
-  'District',
-  'Source',
-  'Campaign',
-  'Product Interest',
-  'Lead Type',
-  'Branch',
-  'Executive',
-  'Remarks',
+  'customerName',
+  'mobile',
+  'product',
+  'requirement',
+  'district',
+  'source',
+  'branch',
+  'executive',
 ];
 
 export const LEAD_TEMPLATE_SAMPLE_ROW = [
   'ABC Logistics',
   '9988776655',
-  '',
+  'Tata Ace',
   'ops@abc.in',
   'Chennai',
   'Walk-in',
-  'Q2 Fleet',
-  'Tata Ace',
-  'New',
   'Chennai Central',
   'Sales Executive',
-  'Fleet enquiry',
 ];
 
 export const buildLeadTemplateWorkbook = () => {
