@@ -57,6 +57,9 @@ export const env = {
   WHATSAPP_CAMPAIGN_USER_NAME: process.env.WHATSAPP_CAMPAIGN_USER_NAME || 'Zentroverse',
   WHATSAPP_CAMPAIGN_SOURCE: process.env.WHATSAPP_CAMPAIGN_SOURCE || 'zentroflow-lead-inbox',
   WHATSAPP_CAMPAIGN_DELAY_MS: process.env.WHATSAPP_CAMPAIGN_DELAY_MS || '350',
+
+  /** Max customers/opportunities returned on GET /bootstrap (inbox sync) */
+  BOOTSTRAP_MAX_LEADS: Number(process.env.BOOTSTRAP_MAX_LEADS || 10000),
 };
 
 export const validateEnv = () => {

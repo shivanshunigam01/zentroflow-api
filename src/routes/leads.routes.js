@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { downloadTemplate, generateImportIds, getLastImport, importLeads, validateImport, bulkWhatsAppCampaign } from '../controllers/leads.controller.js';
+import { downloadTemplate, generateImportIds, getLastImport, importLeads, validateImport, bulkWhatsAppCampaign, bulkWhatsAppCount } from '../controllers/leads.controller.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { optionalExcelUpload } from '../middleware/optionalUpload.middleware.js';
 import { importRowsValidator } from '../validators/import.validator.js';
@@ -14,6 +14,7 @@ const longWhatsApp = longRunningRequest(900000);
 
 router.get('/import/template', downloadTemplate);
 
+router.get('/bulk-whatsapp/count', bulkWhatsAppCount);
 router.post('/bulk-whatsapp', longWhatsApp, bulkWhatsAppCampaign);
 
 router.post('/import/validate', longImport, optionalExcelUpload, importRowsValidator, validate, validateImport);
