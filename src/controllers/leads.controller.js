@@ -10,6 +10,11 @@ import {
   buildLeadTemplateWorkbook,
   filterLeadRows,
 } from '../services/excelImport.service.js';
+import { ApiError } from '../middleware/errorHandler.middleware.js';
+import {
+  sendBulkWhatsAppCampaign,
+  isWhatsAppCampaignConfigured,
+} from '../services/whatsappCampaign.service.js';
 
 const getRows = (req) => {
   if (req.file) return rowsFromWorkbookBuffer(req.file.buffer);
@@ -33,4 +38,22 @@ export const downloadTemplate = asyncHandler(async (req, res) => {
   res.setHeader('Content-Disposition', 'attachment; filename="zentroflow-leads-template.xlsx"');
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.send(buffer);
+});
+
+/** POST { mobiles: string[] } — up to 100 numbers per request, sent one-by-one. */
+export const bulkWhatsAppCampaign = asyncHandler(async (req, res) => {
+  if (!isWhatsAppCampaignConfigured()) {
+    throw new ApiError(503, 'WHATSAPP_NOT_CONFIGURED', 'Set WHATSAPP_CAMPAIGN_API_KEY in server .env');
+  }
+
+  const mobiles = Array.isArray(req.body.mobiles) ? req.body.mobiles : [];
+  if (mobiles.length === 0) {
+    throw new ApiError(400, 'NO_MOBILES', 'Provide mobiles array');
+  }
+  if (mobiles.length > 100) {
+    throw new ApiError(400, 'BATCH_TOO_LARGE', 'Maximum 100 numbers per request');
+  }
+
+  const result = await sendBulkWhatsAppCampaign(mobiles, { delayMs: req.body.delayMs });
+  ok(res, result);
 });

@@ -48,6 +48,15 @@ export const env = {
   AISENSY_SHARED_SECRET: process.env.AISENSY_SHARED_SECRET,
   AISENSY_PARTNER_PLAN_FAMILY_ID: process.env.AISENSY_PARTNER_PLAN_FAMILY_ID,
   AISENSY_PLAN_FAMILY_ID: process.env.AISENSY_PLAN_FAMILY_ID,
+
+  /** WhatsApp bulk campaign (api-wa.co / AiSensy) — server-side only */
+  WHATSAPP_CAMPAIGN_API_URL: process.env.WHATSAPP_CAMPAIGN_API_URL
+    || 'https://backend.api-wa.co/campaign/zentroverse-global/api/v2',
+  WHATSAPP_CAMPAIGN_API_KEY: process.env.WHATSAPP_CAMPAIGN_API_KEY,
+  WHATSAPP_CAMPAIGN_NAME: process.env.WHATSAPP_CAMPAIGN_NAME || 'flowtest',
+  WHATSAPP_CAMPAIGN_USER_NAME: process.env.WHATSAPP_CAMPAIGN_USER_NAME || 'Zentroverse',
+  WHATSAPP_CAMPAIGN_SOURCE: process.env.WHATSAPP_CAMPAIGN_SOURCE || 'zentroflow-lead-inbox',
+  WHATSAPP_CAMPAIGN_DELAY_MS: process.env.WHATSAPP_CAMPAIGN_DELAY_MS || '350',
 };
 
 export const validateEnv = () => {
