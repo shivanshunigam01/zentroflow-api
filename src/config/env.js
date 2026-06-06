@@ -58,6 +58,11 @@ export const env = {
   WHATSAPP_CAMPAIGN_SOURCE: process.env.WHATSAPP_CAMPAIGN_SOURCE || 'zentroflow-lead-inbox',
   WHATSAPP_CAMPAIGN_DELAY_MS: process.env.WHATSAPP_CAMPAIGN_DELAY_MS || '350',
 
+  /** AiSensy connect.api-wa.co — project id (defaults from JWT id in WHATSAPP_CAMPAIGN_API_KEY) */
+  WHATSAPP_PROJECT_ID: process.env.WHATSAPP_PROJECT_ID,
+  /** Optional override; otherwise resolved via campaign-details API */
+  WHATSAPP_CAMPAIGN_ID: process.env.WHATSAPP_CAMPAIGN_ID,
+
   /** Max customers/opportunities returned on GET /bootstrap (inbox sync) */
   BOOTSTRAP_MAX_LEADS: Number(process.env.BOOTSTRAP_MAX_LEADS || 10000),
 };

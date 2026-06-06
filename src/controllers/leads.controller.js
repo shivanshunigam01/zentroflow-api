@@ -17,6 +17,10 @@ import {
   isWhatsAppCampaignConfigured,
   formatWhatsAppDestination,
 } from '../services/whatsappCampaign.service.js';
+import {
+  buildWhatsAppCampaignReport,
+  isAisensyConnectConfigured,
+} from '../services/aisensyConnect.service.js';
 
 const loadCustomerMobilesPage = async (page = 0, pageSize = 100) => {
   const customers = await Customer.find({}, { mobile: 1, mobile_normalized: 1 })
@@ -80,6 +84,23 @@ export const bulkWhatsAppCampaign = asyncHandler(async (req, res) => {
 
   const result = await sendBulkWhatsAppCampaign(mobiles, { delayMs: req.body.delayMs });
   ok(res, result);
+});
+
+/** GET — campaign delivery report from AiSensy connect API (sent/delivered/read/replied/failed). */
+export const bulkWhatsAppReport = asyncHandler(async (req, res) => {
+  if (!isAisensyConnectConfigured()) {
+    throw new ApiError(
+      503,
+      'AISENSY_NOT_CONFIGURED',
+      'Set AISENSY_PARTNER_API_KEY and WHATSAPP_CAMPAIGN_API_KEY (or WHATSAPP_PROJECT_ID) in server .env',
+    );
+  }
+
+  const report = await buildWhatsAppCampaignReport({
+    campaignName: req.query.campaignName || undefined,
+  });
+
+  ok(res, report);
 });
 
 const getRows = (req) => {
