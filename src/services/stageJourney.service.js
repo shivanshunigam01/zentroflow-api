@@ -13,7 +13,7 @@ const withCustomer = async (opportunity) => {
   };
 };
 
-export const saveStageStep = async (opportunityId, { micro_stage, notes, owner }, changedBy = 'System') => {
+export const saveStageStep = async (opportunityId, { micro_stage, notes, fields, owner }, changedBy = 'System') => {
   const opportunity = await Opportunity.findOne({ opportunity_id: opportunityId });
   if (!opportunity) throw new ApiError(404, 'OPPORTUNITY_NOT_FOUND', 'Opportunity not found');
 
@@ -24,10 +24,16 @@ export const saveStageStep = async (opportunityId, { micro_stage, notes, owner }
     ? { ...opportunity.stage_step_data }
     : {};
 
+  const prev = data[code] && typeof data[code] === 'object' ? data[code] : {};
+  const mergedFields = fields && typeof fields === 'object'
+    ? { ...(prev.fields || {}), ...fields }
+    : (prev.fields || {});
+
   data[code] = {
-    ...(data[code] || {}),
-    notes: notes ?? data[code]?.notes ?? '',
-    owner: owner ?? data[code]?.owner ?? opportunity.current_owner,
+    ...prev,
+    notes: notes ?? prev.notes ?? '',
+    fields: mergedFields,
+    owner: owner ?? prev.owner ?? opportunity.current_owner,
     updated_at: new Date().toISOString(),
     updated_by: changedBy,
   };
@@ -38,7 +44,7 @@ export const saveStageStep = async (opportunityId, { micro_stage, notes, owner }
   return withCustomer(opportunity);
 };
 
-export const advanceToNextStage = async (opportunityId, { notes, owner }, changedBy = 'System') => {
+export const advanceToNextStage = async (opportunityId, { notes, fields, owner }, changedBy = 'System') => {
   const opportunity = await Opportunity.findOne({ opportunity_id: opportunityId });
   if (!opportunity) throw new ApiError(404, 'OPPORTUNITY_NOT_FOUND', 'Opportunity not found');
 
@@ -55,6 +61,9 @@ export const advanceToNextStage = async (opportunityId, { notes, owner }, change
   data[current] = {
     ...(data[current] || {}),
     notes: notes ?? data[current]?.notes ?? '',
+    fields: fields && typeof fields === 'object'
+      ? { ...(data[current]?.fields || {}), ...fields }
+      : (data[current]?.fields || {}),
     owner: owner ?? data[current]?.owner ?? opportunity.current_owner,
     completed_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
