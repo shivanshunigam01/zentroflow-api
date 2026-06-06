@@ -10,6 +10,7 @@ import { generateIds } from '../services/idGeneration.service.js';
 import { moveStage } from '../services/stageTransition.service.js';
 import { performAction } from '../services/opportunityAction.service.js';
 import { classifyDuplicate } from '../services/duplicate.service.js';
+import { manualLeadEdit } from '../services/manualLeadEdit.service.js';
 
 const withCustomer = async (opportunity) => {
   const customer = await Customer.findOne({ customer_id: opportunity.customer_id }).lean();
@@ -63,6 +64,16 @@ export const updateOpportunity = asyncHandler(async (req, res) => {
   const opportunity = await Opportunity.findOneAndUpdate({ opportunity_id: req.params.opportunityId }, patch, { new: true });
   if (!opportunity) throw new ApiError(404, 'OPPORTUNITY_NOT_FOUND', 'Opportunity not found');
   ok(res, await withCustomer(opportunity));
+});
+
+/** POST — manual edit all lead/opportunity fields from Lead Detail form */
+export const manualEditOpportunity = asyncHandler(async (req, res) => {
+  const dto = await manualLeadEdit(
+    req.params.opportunityId,
+    req.body,
+    req.body.changed_by || req.user?.name || 'System',
+  );
+  ok(res, dto);
 });
 
 export const stageTransition = asyncHandler(async (req, res) => {
