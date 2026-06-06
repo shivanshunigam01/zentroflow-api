@@ -41,6 +41,20 @@ const campaignDetailsUrl = () => {
   return 'https://backend.aisensy.com/campaign/t1/api/campaign-details';
 };
 
+const lookupCampaignByName = async (campaignName = env.WHATSAPP_CAMPAIGN_NAME) => {
+  if (!env.WHATSAPP_CAMPAIGN_API_KEY) return null;
+
+  const res = await fetch(campaignDetailsUrl(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apiKey: env.WHATSAPP_CAMPAIGN_API_KEY, campaignName }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.success || !data?.campaign?._id) return null;
+  return data.campaign;
+};
+
 /** Resolve Mongo campaign _id from campaign name (flowtest). */
 export const resolveCampaignId = async (campaignName = env.WHATSAPP_CAMPAIGN_NAME) => {
   if (env.WHATSAPP_CAMPAIGN_ID) return env.WHATSAPP_CAMPAIGN_ID;
@@ -61,6 +75,14 @@ export const resolveCampaignId = async (campaignName = env.WHATSAPP_CAMPAIGN_NAM
   }
 
   return data.campaign._id;
+};
+
+/** Same campaign as bulk send (WHATSAPP_CAMPAIGN_NAME) — for audience report. */
+export const resolveCampaignIdForReport = async (campaignName = env.WHATSAPP_CAMPAIGN_NAME) => {
+  const campaign = await lookupCampaignByName(campaignName);
+  if (campaign?._id) return campaign._id;
+  if (env.WHATSAPP_CAMPAIGN_ID) return env.WHATSAPP_CAMPAIGN_ID;
+  throw new ApiError(503, 'WHATSAPP_NOT_CONFIGURED', 'Set WHATSAPP_CAMPAIGN_API_KEY in server .env');
 };
 
 export const fetchCampaignMeta = async (campaignName = env.WHATSAPP_CAMPAIGN_NAME) => {
@@ -89,6 +111,20 @@ export const fetchCampaignMeta = async (campaignName = env.WHATSAPP_CAMPAIGN_NAM
   }
 
   return data.campaign;
+};
+
+export const fetchCampaignMetaForReport = async (campaignName = env.WHATSAPP_CAMPAIGN_NAME) => {
+  const campaign = await lookupCampaignByName(campaignName);
+  if (campaign) return campaign;
+  if (env.WHATSAPP_CAMPAIGN_ID) {
+    return {
+      _id: env.WHATSAPP_CAMPAIGN_ID,
+      name: campaignName,
+      status: 'LIVE',
+      type: 'API',
+    };
+  }
+  throw new ApiError(503, 'WHATSAPP_NOT_CONFIGURED', 'Set WHATSAPP_CAMPAIGN_API_KEY in server .env');
 };
 
 const fetchAudiencePage = async (campaignId, { limit = 100, after, type } = {}) => {
@@ -164,8 +200,8 @@ const classifyContact = (contact, { repliedSet, failedSet }) => {
 export const buildWhatsAppCampaignReport = async (options = {}) => {
   const campaignName = options.campaignName || env.WHATSAPP_CAMPAIGN_NAME;
   const [meta, campaignId] = await Promise.all([
-    fetchCampaignMeta(campaignName),
-    resolveCampaignId(campaignName),
+    fetchCampaignMetaForReport(campaignName),
+    resolveCampaignIdForReport(campaignName),
   ]);
 
   const [allRows, repliedRows, failedRows] = await Promise.all([
