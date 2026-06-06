@@ -1,13 +1,15 @@
 import { Router } from 'express';
 import { actionValidator, createOpportunityValidator, listOpportunityValidator, opportunityIdValidator, stageTransitionValidator } from '../validators/opportunity.validator.js';
 import { validate } from '../middleware/validate.middleware.js';
-import { createOpportunity, getActivities, getOpportunity, getStageHistory, listOpportunities, runAction, stageTransition, updateOpportunity, manualEditOpportunity } from '../controllers/opportunities.controller.js';
+import { createOpportunity, getActivities, getOpportunity, getStageHistory, listOpportunities, runAction, stageTransition, updateOpportunity, manualEditOpportunity, saveStageStepData, advanceStageStep } from '../controllers/opportunities.controller.js';
 const router = Router();
 router.get('/', listOpportunityValidator, validate, listOpportunities);
 router.post('/', createOpportunityValidator, validate, createOpportunity);
 router.get('/:opportunityId', opportunityIdValidator, validate, getOpportunity);
 router.patch('/:opportunityId', opportunityIdValidator, validate, updateOpportunity);
 router.post('/:opportunityId/manual-edit', opportunityIdValidator, validate, manualEditOpportunity);
+router.post('/:opportunityId/stage-step', opportunityIdValidator, validate, saveStageStepData);
+router.post('/:opportunityId/advance-stage', opportunityIdValidator, validate, advanceStageStep);
 router.post('/:opportunityId/stage-transition', opportunityIdValidator, stageTransitionValidator, validate, stageTransition);
 router.post('/:opportunityId/actions', opportunityIdValidator, actionValidator, validate, runAction);
 router.get('/:opportunityId/activities', opportunityIdValidator, validate, getActivities);

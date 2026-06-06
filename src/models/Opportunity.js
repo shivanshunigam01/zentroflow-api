@@ -27,6 +27,8 @@ const opportunitySchema = new mongoose.Schema({
   campaign: String,
   branch: { type: String, required: true, default: 'Default Branch' },
   last_activity_at: { type: Date, default: Date.now },
+  /** Per-stage manual notes from Lead Detail journey — keyed by micro stage code */
+  stage_step_data: { type: mongoose.Schema.Types.Mixed, default: {} },
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
 
 opportunitySchema.pre('validate', function validateStage(next) {
