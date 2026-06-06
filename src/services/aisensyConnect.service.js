@@ -64,8 +64,17 @@ export const resolveCampaignId = async (campaignName = env.WHATSAPP_CAMPAIGN_NAM
 };
 
 export const fetchCampaignMeta = async (campaignName = env.WHATSAPP_CAMPAIGN_NAME) => {
+  if (env.WHATSAPP_CAMPAIGN_ID) {
+    return {
+      _id: env.WHATSAPP_CAMPAIGN_ID,
+      name: campaignName,
+      status: 'LIVE',
+      type: 'API',
+    };
+  }
+
   if (!env.WHATSAPP_CAMPAIGN_API_KEY) {
-    throw new ApiError(503, 'WHATSAPP_NOT_CONFIGURED', 'Set WHATSAPP_CAMPAIGN_API_KEY in server .env');
+    throw new ApiError(503, 'WHATSAPP_NOT_CONFIGURED', 'Set WHATSAPP_CAMPAIGN_API_KEY or WHATSAPP_CAMPAIGN_ID in server .env');
   }
 
   const res = await fetch(campaignDetailsUrl(), {
