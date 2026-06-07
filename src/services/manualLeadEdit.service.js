@@ -3,6 +3,7 @@ import Opportunity from '../models/Opportunity.js';
 import { ApiError } from '../middleware/errorHandler.middleware.js';
 import { normalizeMobile, isValidMobile } from '../helpers/mobile.js';
 import { moveStage } from './stageTransition.service.js';
+import { enrichLeadDto } from '../helpers/leadDto.js';
 
 const pickDefined = (body, keys) => {
   const out = {};
@@ -96,11 +97,5 @@ export const manualLeadEdit = async (opportunityId, body = {}, changedBy = 'Syst
   }
 
   const refreshed = await Opportunity.findOne({ opportunity_id: opportunityId });
-  const customerRow = await Customer.findOne({ customer_id: refreshed.customer_id }).lean();
-  return {
-    ...refreshed.toObject(),
-    customer_name: customerRow?.name,
-    customer_mobile: customerRow?.mobile,
-    customer_email: customerRow?.email,
-  };
+  return enrichLeadDto(refreshed);
 };

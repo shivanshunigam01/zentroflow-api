@@ -12,11 +12,9 @@ import { performAction } from '../services/opportunityAction.service.js';
 import { classifyDuplicate } from '../services/duplicate.service.js';
 import { manualLeadEdit } from '../services/manualLeadEdit.service.js';
 import { saveStageStep, advanceToNextStage } from '../services/stageJourney.service.js';
+import { enrichLeadDto } from '../helpers/leadDto.js';
 
-const withCustomer = async (opportunity) => {
-  const customer = await Customer.findOne({ customer_id: opportunity.customer_id }).lean();
-  return { ...opportunity.toObject?.() || opportunity, customer_name: customer?.name, customer_mobile: customer?.mobile };
-};
+const withCustomer = enrichLeadDto;
 
 export const listOpportunities = asyncHandler(async (req, res) => {
   const { page, limit, skip } = getPagination(req.query);

@@ -2,16 +2,10 @@ import Opportunity from '../models/Opportunity.js';
 import { ApiError } from '../middleware/errorHandler.middleware.js';
 import { moveStage } from './stageTransition.service.js';
 import { getNextJourneyMicroStage } from '../constants/stages.js';
+import { syncStageFieldsToLead } from './stageStepLeadSync.service.js';
+import { enrichLeadDto } from '../helpers/leadDto.js';
 
-const withCustomer = async (opportunity) => {
-  const Customer = (await import('../models/Customer.js')).default;
-  const customer = await Customer.findOne({ customer_id: opportunity.customer_id }).lean();
-  return {
-    ...opportunity.toObject?.() ?? opportunity,
-    customer_name: customer?.name,
-    customer_mobile: customer?.mobile,
-  };
-};
+const withCustomer = enrichLeadDto;
 
 export const saveStageStep = async (opportunityId, { micro_stage, notes, fields, owner }, changedBy = 'System') => {
   const opportunity = await Opportunity.findOne({ opportunity_id: opportunityId });
@@ -39,6 +33,9 @@ export const saveStageStep = async (opportunityId, { micro_stage, notes, fields,
   };
 
   opportunity.stage_step_data = data;
+
+  await syncStageFieldsToLead(opportunity, mergedFields);
+
   opportunity.last_activity_at = new Date();
   await opportunity.save();
   return withCustomer(opportunity);
@@ -72,6 +69,9 @@ export const advanceToNextStage = async (opportunityId, { notes, fields, owner }
 
   opportunity.stage_step_data = data;
   await opportunity.save();
+
+  const stepFields = data[current]?.fields || {};
+  await syncStageFieldsToLead(opportunity, stepFields);
 
   const updated = await moveStage({
     opportunity_id: opportunityId,

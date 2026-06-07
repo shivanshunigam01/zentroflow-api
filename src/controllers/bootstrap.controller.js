@@ -2,18 +2,12 @@ import Customer from '../models/Customer.js';
 import Opportunity from '../models/Opportunity.js';
 import LeadActivity from '../models/LeadActivity.js';
 import ImportBatch from '../models/ImportBatch.js';
+import { enrichLeadDto } from '../helpers/leadDto.js';
 import { env } from '../config/env.js';
 import { asyncHandler } from '../middleware/asyncHandler.middleware.js';
 import { ok } from '../helpers/apiResponse.js';
 
-const withCustomer = async (opportunity) => {
-  const customer = await Customer.findOne({ customer_id: opportunity.customer_id }).lean();
-  return {
-    ...opportunity.toObject?.() ?? opportunity,
-    customer_name: customer?.name,
-    customer_mobile: customer?.mobile,
-  };
-};
+const withCustomer = enrichLeadDto;
 
 export const bootstrap = asyncHandler(async (req, res) => {
   const cap = env.BOOTSTRAP_MAX_LEADS;
