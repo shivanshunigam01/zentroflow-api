@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { randomUUID } from 'crypto';
 import { env } from '../config/env.js';
 import { isValidMobile, normalizeMobile } from '../helpers/mobile.js';
@@ -222,3 +223,147 @@ export const getSyncLogByBatchId = async (batchId) => {
   const batch = log.batch_results.find((b) => b.batch_id === batchId);
   return { log, batch };
 };
+
+// ---------------------------------------------------------------------------
+// Click-to-Call Support API
+// Docs: https://docs.smartflo.tatatelebusiness.com/reference/v1click_to_call_support
+//
+// Test (local, with API_PREFIX=/api/v1):
+// curl -X POST http://localhost:8787/api/v1/smartflo/call \
+//   -H "Content-Type: application/json" \
+//   -H "Authorization: Bearer YOUR_JWT" \
+//   -d '{"phoneNumber":"917247650665"}'
+// ---------------------------------------------------------------------------
+
+/** Validate Click-to-Call env (API key + IVR id). */
+export const validateClickToCallConfig = () => {
+  if (!env.SMARTFLO_CLICK_TO_CALL_API_KEY?.trim()) {
+    throw new ApiError(503, 'SMARTFLO_CTC_NOT_CONFIGURED', 'Set SMARTFLO_CLICK_TO_CALL_API_KEY in server .env');
+  }
+  if (!env.SMARTFLO_IVR_ID?.trim()) {
+    throw new ApiError(503, 'SMARTFLO_CTC_NOT_CONFIGURED', 'Set SMARTFLO_IVR_ID in server .env');
+  }
+};
+
+export const isClickToCallConfigured = () => Boolean(
+  env.SMARTFLO_CLICK_TO_CALL_API_KEY?.trim() && env.SMARTFLO_IVR_ID?.trim(),
+);
+
+/**
+ * Normalize to 91XXXXXXXXXX for Smartflo outbound calls.
+ * Accepts +91, 0-prefix, or bare 10-digit Indian mobile.
+ */
+export const normalizePhoneForSmartfloCall = (phoneNumber = '') => {
+  let digits = String(phoneNumber).replace(/\D/g, '');
+
+  if (digits.length === 10 && /^[6-9]/.test(digits)) {
+    digits = `91${digits}`;
+  } else if (digits.length === 11 && digits.startsWith('0')) {
+    digits = `91${digits.slice(1)}`;
+  } else if (digits.length === 12 && digits.startsWith('91')) {
+    // already 91XXXXXXXXXX
+  } else if (digits.length > 12 && digits.startsWith('91')) {
+    digits = digits.slice(0, 12);
+  }
+
+  return digits;
+};
+
+export const validateClickToCallPhone = (phoneNumber) => {
+  if (!phoneNumber || !String(phoneNumber).trim()) {
+    throw new ApiError(400, 'INVALID_PHONE', 'phoneNumber is required', 'phoneNumber');
+  }
+
+  const normalized = normalizePhoneForSmartfloCall(phoneNumber);
+  if (!/^91[6-9]\d{9}$/.test(normalized)) {
+    throw new ApiError(
+      400,
+      'INVALID_PHONE',
+      'phoneNumber must be a valid Indian mobile (+91 / 10-digit / 91XXXXXXXXXX)',
+      'phoneNumber',
+    );
+  }
+
+  return normalized;
+};
+
+/**
+ * Build Smartflo Click-to-Call request body.
+ * TODO: Confirm Smartflo Click-to-Call endpoint and payload from Smartflo docs/panel
+ *       if your account uses a different field layout than click_to_call_support.
+ *
+ * Support API uses api_key + customer_number (IVR/agent routing is tied to the API key in panel).
+ */
+export function buildClickToCallPayload(customerNumber) {
+  const payload = {
+    api_key: env.SMARTFLO_CLICK_TO_CALL_API_KEY,
+    customer_number: customerNumber,
+    async: 1,
+  };
+
+  if (env.SMARTFLO_CALLER_ID?.trim()) {
+    payload.caller_id = env.SMARTFLO_CALLER_ID.trim();
+  }
+
+  if (env.SMARTFLO_IVR_ID?.trim()) {
+    payload.custom_identifier = `ivr:${env.SMARTFLO_IVR_ID.trim()}`;
+  }
+
+  return payload;
+};
+
+export const getClickToCallUrl = () => {
+  const base = env.SMARTFLO_BASE_URL.replace(/\/+$/, '');
+  const path = env.SMARTFLO_CLICK_TO_CALL_ENDPOINT.startsWith('/')
+    ? env.SMARTFLO_CLICK_TO_CALL_ENDPOINT
+    : `/${env.SMARTFLO_CLICK_TO_CALL_ENDPOINT}`;
+  return `${base}${path}`;
+};
+
+/** Trigger Smartflo IVR click-to-call for one lead phone number. */
+export const initiateClickToCall = async (phoneNumber, meta = {}) => {
+  validateClickToCallConfig();
+  const normalized = validateClickToCallPhone(phoneNumber);
+  const url = getClickToCallUrl();
+  const payload = buildClickToCallPayload(normalized);
+
+  console.log('[Smartflo CTC] Incoming request body:', { phoneNumber, ...meta });
+  console.log('[Smartflo CTC] Normalized phone number:', normalized);
+  console.log('[Smartflo CTC] Smartflo API URL:', url);
+  console.log('[Smartflo CTC] Smartflo request payload:', {
+    ...payload,
+    api_key: payload.api_key ? '***redacted***' : undefined,
+  });
+
+  try {
+    const { data, status } = await axios.post(url, payload, {
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      timeout: 30000,
+    });
+
+    console.log('[Smartflo CTC] Smartflo success response:', { status, data });
+
+    return {
+      success: data?.success !== false,
+      message: data?.message ?? 'Call originated successfully',
+      phoneNumber: normalized,
+      ivrId: env.SMARTFLO_IVR_ID,
+      smartflo: data,
+    };
+  } catch (err) {
+    const status = err.response?.status;
+    const data = err.response?.data;
+    console.error('[Smartflo CTC] Smartflo error response:', { status, data, message: err.message });
+
+    const message = data?.message
+      || data?.error
+      || err.message
+      || 'Smartflo click-to-call failed';
+
+    throw new ApiError(502, 'SMARTFLO_CTC_FAILED', message, 'phoneNumber');
+  }
+};
+
