@@ -225,28 +225,36 @@ export const getSyncLogByBatchId = async (batchId) => {
 };
 
 // ---------------------------------------------------------------------------
-// Click-to-Call Support API
-// Docs: https://docs.smartflo.tatatelebusiness.com/reference/v1click_to_call_support
+// Click-to-Call API (official API Connect — form-urlencoded)
+// Confirmed field mapping from Smartflo panel UI (no browser _token / CSRF).
 //
-// Test (local, with API_PREFIX=/api/v1):
 // curl -X POST http://localhost:8787/api/v1/smartflo/call \
 //   -H "Content-Type: application/json" \
 //   -H "Authorization: Bearer YOUR_JWT" \
-//   -d '{"phoneNumber":"917247650665"}'
+//   -d '{"phoneNumber":"919893654192"}'
 // ---------------------------------------------------------------------------
 
-/** Validate Click-to-Call env (API key + IVR id). */
+/** Validate Click-to-Call env (API key + agent/caller/user ids). */
 export const validateClickToCallConfig = () => {
   if (!env.SMARTFLO_CLICK_TO_CALL_API_KEY?.trim()) {
     throw new ApiError(503, 'SMARTFLO_CTC_NOT_CONFIGURED', 'Set SMARTFLO_CLICK_TO_CALL_API_KEY in server .env');
   }
-  if (!env.SMARTFLO_IVR_ID?.trim()) {
-    throw new ApiError(503, 'SMARTFLO_CTC_NOT_CONFIGURED', 'Set SMARTFLO_IVR_ID in server .env');
+  if (!env.SMARTFLO_CTC_CALLER_ID?.trim()) {
+    throw new ApiError(503, 'SMARTFLO_CTC_NOT_CONFIGURED', 'Set SMARTFLO_CTC_CALLER_ID in server .env');
+  }
+  if (!env.SMARTFLO_CTC_AGENT_ID?.trim()) {
+    throw new ApiError(503, 'SMARTFLO_CTC_NOT_CONFIGURED', 'Set SMARTFLO_CTC_AGENT_ID in server .env');
+  }
+  if (!env.SMARTFLO_USER_ID?.trim()) {
+    throw new ApiError(503, 'SMARTFLO_CTC_NOT_CONFIGURED', 'Set SMARTFLO_USER_ID in server .env');
   }
 };
 
 export const isClickToCallConfigured = () => Boolean(
-  env.SMARTFLO_CLICK_TO_CALL_API_KEY?.trim() && env.SMARTFLO_IVR_ID?.trim(),
+  env.SMARTFLO_CLICK_TO_CALL_API_KEY?.trim()
+  && env.SMARTFLO_CTC_CALLER_ID?.trim()
+  && env.SMARTFLO_CTC_AGENT_ID?.trim()
+  && env.SMARTFLO_USER_ID?.trim(),
 );
 
 /**
@@ -288,29 +296,32 @@ export const validateClickToCallPhone = (phoneNumber) => {
 };
 
 /**
- * Build Smartflo Click-to-Call request body.
- * TODO: Confirm Smartflo Click-to-Call endpoint and payload from Smartflo docs/panel
- *       if your account uses a different field layout than click_to_call_support.
- *
- * Support API uses api_key + customer_number (IVR/agent routing is tied to the API key in panel).
+ * Build Smartflo Click-to-Call form body (x-www-form-urlencoded).
+ * Maps confirmed Smartflo UI fields — no browser session _token.
  */
-export function buildClickToCallPayload(customerNumber) {
-  const payload = {
-    api_key: env.SMARTFLO_CLICK_TO_CALL_API_KEY,
-    customer_number: customerNumber,
-    async: 1,
+export function buildClickToCallPayload(normalizedPhone) {
+  return {
+    phone_ctc: normalizedPhone,
+    ctc_caller_id: env.SMARTFLO_CTC_CALLER_ID.trim(),
+    ctc_agent_id: env.SMARTFLO_CTC_AGENT_ID.trim(),
+    user_id: env.SMARTFLO_USER_ID.trim(),
   };
+}
 
-  if (env.SMARTFLO_CALLER_ID?.trim()) {
-    payload.caller_id = env.SMARTFLO_CALLER_ID.trim();
-  }
-
-  if (env.SMARTFLO_IVR_ID?.trim()) {
-    payload.custom_identifier = `ivr:${env.SMARTFLO_IVR_ID.trim()}`;
-  }
-
-  return payload;
+export const getClickToCallRequestHeaders = () => {
+  const apiKey = env.SMARTFLO_CLICK_TO_CALL_API_KEY.trim();
+  return {
+    Accept: 'application/json',
+    'Content-Type': 'application/x-www-form-urlencoded',
+    api_key: apiKey,
+  };
 };
+
+export const redactClickToCallHeaders = (headers) => ({
+  ...headers,
+  api_key: headers.api_key ? '***redacted***' : undefined,
+  Authorization: headers.Authorization ? '***redacted***' : undefined,
+});
 
 export const getClickToCallUrl = () => {
   const base = env.SMARTFLO_BASE_URL.replace(/\/+$/, '');
@@ -320,27 +331,24 @@ export const getClickToCallUrl = () => {
   return `${base}${path}`;
 };
 
-/** Trigger Smartflo IVR click-to-call for one lead phone number. */
+/** Trigger Smartflo click-to-call for one lead phone number. */
 export const initiateClickToCall = async (phoneNumber, meta = {}) => {
   validateClickToCallConfig();
   const normalized = validateClickToCallPhone(phoneNumber);
   const url = getClickToCallUrl();
   const payload = buildClickToCallPayload(normalized);
+  const formBody = new URLSearchParams(payload).toString();
+  const headers = getClickToCallRequestHeaders();
 
   console.log('[Smartflo CTC] Incoming request body:', { phoneNumber, ...meta });
   console.log('[Smartflo CTC] Normalized phone number:', normalized);
-  console.log('[Smartflo CTC] Smartflo API URL:', url);
-  console.log('[Smartflo CTC] Smartflo request payload:', {
-    ...payload,
-    api_key: payload.api_key ? '***redacted***' : undefined,
-  });
+  console.log('[Smartflo CTC] Final URL:', url);
+  console.log('[Smartflo CTC] Final payload:', payload);
+  console.log('[Smartflo CTC] Request headers:', redactClickToCallHeaders(headers));
 
   try {
-    const { data, status } = await axios.post(url, payload, {
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
+    const { data, status } = await axios.post(url, formBody, {
+      headers,
       timeout: 30000,
     });
 
@@ -348,9 +356,8 @@ export const initiateClickToCall = async (phoneNumber, meta = {}) => {
 
     return {
       success: data?.success !== false,
-      message: data?.message ?? 'Call originated successfully',
+      message: data?.message ?? data?.msg ?? 'Call originated successfully',
       phoneNumber: normalized,
-      ivrId: env.SMARTFLO_IVR_ID,
       smartflo: data,
     };
   } catch (err) {
@@ -358,7 +365,8 @@ export const initiateClickToCall = async (phoneNumber, meta = {}) => {
     const data = err.response?.data;
     console.error('[Smartflo CTC] Smartflo error response:', { status, data, message: err.message });
 
-    const message = data?.message
+    const message = (typeof data === 'string' ? data : null)
+      || data?.message
       || data?.error
       || err.message
       || 'Smartflo click-to-call failed';

@@ -5,7 +5,6 @@ import {
   getSmartfloBatchStatus,
   getSyncLogByBatchId,
   initiateClickToCall,
-  initiateDirectAgentCall,
   isClickToCallConfigured,
   isDirectAgentCallConfigured,
   isSmartfloConfigured,
@@ -39,7 +38,7 @@ export const smartfloBatchStatus = asyncHandler(async (req, res) => {
   });
 });
 
-/** POST /smartflo/call — trigger IVR click-to-call support (unchanged) */
+/** POST /smartflo/call — trigger Click-to-Call (form-urlencoded Smartflo API) */
 export const smartfloClickToCall = asyncHandler(async (req, res) => {
   console.log('[Smartflo CTC] Controller body:', req.body);
   const result = await initiateClickToCall(req.body.phoneNumber, {
@@ -50,10 +49,10 @@ export const smartfloClickToCall = asyncHandler(async (req, res) => {
   ok(res, result);
 });
 
-/** POST /smartflo/agent-call — direct agent click-to-call (/v1/click_to_call) */
+/** POST /smartflo/agent-call — delegates to same Click-to-Call service as /call */
 export const smartfloDirectAgentCall = asyncHandler(async (req, res) => {
-  console.log('[Smartflo Agent CTC] Controller body:', req.body);
-  const result = await initiateDirectAgentCall(req.body.phoneNumber, {
+  console.log('[Smartflo Agent CTC] Controller body (delegating to CTC):', req.body);
+  const result = await initiateClickToCall(req.body.phoneNumber, {
     opportunityId: req.body.opportunityId,
     customerName: req.body.customerName,
     requestedBy: req.user?.name || req.user?.email || 'User',
