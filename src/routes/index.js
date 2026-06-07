@@ -12,6 +12,7 @@ import enginesRoutes from './engines.routes.js';
 import dashboardRoutes from './dashboard.routes.js';
 import reportsRoutes from './reports.routes.js';
 import accessRoutes from './access.routes.js';
+import adminRoutes from './admin.routes.js';
 
 const router = Router();
 
@@ -29,6 +30,7 @@ router.use('/engines', enginesRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/reports', reportsRoutes);
 router.use('/access', accessRoutes);
+router.use('/admin', adminRoutes);
 router.use('/bot', botRoutes);
 
 export default router;

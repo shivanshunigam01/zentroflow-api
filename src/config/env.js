@@ -65,6 +65,11 @@ export const env = {
 
   /** Max customers/opportunities returned on GET /bootstrap (inbox sync) */
   BOOTSTRAP_MAX_LEADS: Number(process.env.BOOTSTRAP_MAX_LEADS || 10000),
+
+  /** Tata Smartflo IVR — bulk lead list upload (server-side only) */
+  SMARTFLO_API_TOKEN: process.env.SMARTFLO_API_TOKEN,
+  SMARTFLO_LEAD_LIST_ID: process.env.SMARTFLO_LEAD_LIST_ID,
+  SMARTFLO_BASE_URL: process.env.SMARTFLO_BASE_URL || 'https://api-smartflo.tatateleservices.com',
 };
 
 export const validateEnv = () => {
