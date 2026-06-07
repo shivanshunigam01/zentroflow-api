@@ -77,6 +77,11 @@ export const env = {
   SMARTFLO_CLICK_TO_CALL_ENDPOINT: process.env.SMARTFLO_CLICK_TO_CALL_ENDPOINT || '/v1/click_to_call_support',
   /** Optional DID — format 9180694XXXXX */
   SMARTFLO_CALLER_ID: process.env.SMARTFLO_CALLER_ID,
+
+  /** Direct agent Click-to-Call — POST /v1/click_to_call (Bearer token) */
+  SMARTFLO_DIRECT_CALL_ENDPOINT: process.env.SMARTFLO_DIRECT_CALL_ENDPOINT || '/v1/click_to_call',
+  /** Smartflo agent extension / ID who receives the call first */
+  SMARTFLO_AGENT_NUMBER: process.env.SMARTFLO_AGENT_NUMBER,
 };
 
 export const validateEnv = () => {

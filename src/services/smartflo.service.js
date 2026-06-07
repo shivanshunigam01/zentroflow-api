@@ -367,3 +367,98 @@ export const initiateClickToCall = async (phoneNumber, meta = {}) => {
   }
 };
 
+// ---------------------------------------------------------------------------
+// Direct Agent Click-to-Call API (separate from IVR Support API above)
+// Docs: https://docs.smartflo.tatatelebusiness.com/reference/v1click_to_call
+//
+// curl -X POST http://localhost:8787/api/v1/smartflo/agent-call \
+//   -H "Content-Type: application/json" \
+//   -H "Authorization: Bearer YOUR_JWT" \
+//   -d '{"phoneNumber":"917247650665"}'
+// ---------------------------------------------------------------------------
+
+export const validateDirectAgentCallConfig = () => {
+  if (!env.SMARTFLO_API_TOKEN?.trim()) {
+    throw new ApiError(503, 'SMARTFLO_AGENT_CTC_NOT_CONFIGURED', 'Set SMARTFLO_API_TOKEN in server .env');
+  }
+  if (!env.SMARTFLO_AGENT_NUMBER?.trim()) {
+    throw new ApiError(503, 'SMARTFLO_AGENT_CTC_NOT_CONFIGURED', 'Set SMARTFLO_AGENT_NUMBER in server .env');
+  }
+  if (!env.SMARTFLO_CALLER_ID?.trim()) {
+    throw new ApiError(503, 'SMARTFLO_AGENT_CTC_NOT_CONFIGURED', 'Set SMARTFLO_CALLER_ID in server .env');
+  }
+};
+
+export const isDirectAgentCallConfigured = () => Boolean(
+  env.SMARTFLO_API_TOKEN?.trim()
+  && env.SMARTFLO_AGENT_NUMBER?.trim()
+  && env.SMARTFLO_CALLER_ID?.trim(),
+);
+
+/** 10-digit destination for /v1/click_to_call */
+export const toDirectCallDestination = (phoneNumber) => {
+  const normalized = validateClickToCallPhone(phoneNumber);
+  return normalized.slice(-10);
+};
+
+export function buildDirectAgentCallPayload(destinationNumber) {
+  return {
+    agent_number: env.SMARTFLO_AGENT_NUMBER.trim(),
+    destination_number: destinationNumber,
+    caller_id: env.SMARTFLO_CALLER_ID.trim(),
+    async: 1,
+  };
+}
+
+export const getDirectAgentCallUrl = () => {
+  const base = env.SMARTFLO_BASE_URL.replace(/\/+$/, '');
+  const endpoint = env.SMARTFLO_DIRECT_CALL_ENDPOINT || '/v1/click_to_call';
+  const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  return `${base}${path}`;
+};
+
+/** Direct agent click-to-call — rings agent first, then connects customer. */
+export const initiateDirectAgentCall = async (phoneNumber, meta = {}) => {
+  validateDirectAgentCallConfig();
+  const destination = toDirectCallDestination(phoneNumber);
+  const url = getDirectAgentCallUrl();
+  const payload = buildDirectAgentCallPayload(destination);
+
+  console.log('[Smartflo Agent CTC] Incoming request body:', { phoneNumber, ...meta });
+  console.log('[Smartflo Agent CTC] Destination number:', destination);
+  console.log('[Smartflo Agent CTC] Smartflo API URL:', url);
+  console.log('[Smartflo Agent CTC] Smartflo request payload:', payload);
+
+  try {
+    const { data, status } = await axios.post(url, payload, {
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${env.SMARTFLO_API_TOKEN}`,
+      },
+      timeout: 30000,
+    });
+
+    console.log('[Smartflo Agent CTC] Smartflo success response:', { status, data });
+
+    return {
+      success: data?.success !== false,
+      message: data?.message ?? 'Call originated successfully',
+      phoneNumber: destination,
+      agentNumber: env.SMARTFLO_AGENT_NUMBER,
+      smartflo: data,
+    };
+  } catch (err) {
+    const status = err.response?.status;
+    const data = err.response?.data;
+    console.error('[Smartflo Agent CTC] Smartflo error response:', { status, data, message: err.message });
+
+    const message = data?.message
+      || data?.error
+      || err.message
+      || 'Smartflo direct agent call failed';
+
+    throw new ApiError(502, 'SMARTFLO_AGENT_CTC_FAILED', message, 'phoneNumber');
+  }
+};
+
