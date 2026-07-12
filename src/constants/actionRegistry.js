@@ -1,6 +1,6 @@
 /**
  * Stage-changing actions — aligned with zentroverse-buddy/src/domain/actions/action-registry.ts
- * Only entries with microStage (or macro cross-moves) are listed for POST .../actions
+ * ys Only entries with microStage (or macro cross-moves) are listed for POST .../actions
  */
 export const ACTION_REGISTRY = {
   'Move to C1': { microStage: 'C1.1' },
