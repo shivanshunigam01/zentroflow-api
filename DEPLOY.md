@@ -86,9 +86,11 @@ The API also uses a **10 minute** HTTP timeout (`server.js`). Import uses **bulk
 
 ## CORS duplicate headers (browser blocks API)
 
-If you see **two** `Access-Control-Allow-Origin` values (e.g. your Vercel URL **and** `*`), nginx is adding CORS **and** Express is too.
+Symptom: `curl` to `/api/v1/auth/login` works, but the browser shows **Failed to fetch** / network error from `https://zentroverse-automation.vercel.app`.
 
-**Remove CORS from nginx** — let Node handle it only:
+Cause: nginx and Express both send `Access-Control-Allow-Origin` (e.g. Vercel URL **and** `*`). Browsers reject duplicate CORS headers; curl does not enforce CORS.
+
+**Remove CORS from nginx** — let Node (`src/config/cors.js`) handle it only:
 
 ```nginx
 # DELETE lines like these from your site config:
@@ -97,17 +99,25 @@ If you see **two** `Access-Control-Allow-Origin` values (e.g. your Vercel URL **
 # add_header Access-Control-Allow-Headers ...;
 ```
 
-Reload nginx after editing.
+Set production `.env`:
 
-Verify one header only:
-
-```bash
-curl -I -X OPTIONS "https://flow.zentroverse.com/api/v1/auth/login" \
-  -H "Origin: https://zentroverse-automation.vercel.app" \
-  -H "Access-Control-Request-Method: POST"
+```env
+CORS_ORIGIN=https://zentroverse-automation.vercel.app,https://flow.zentroverse.com
 ```
 
-Expect a **single** `Access-Control-Allow-Origin: *`
+Then: `pm2 restart zentroflow-api --update-env` and `sudo nginx -t && sudo systemctl reload nginx`.
+
+Verify **one** header only:
+
+```bash
+curl -i -X OPTIONS "https://flow.zentroverse.com/api/v1/auth/login" \
+  -H "Origin: https://zentroverse-automation.vercel.app" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: content-type,authorization"
+```
+
+Expect a **single**:
+`Access-Control-Allow-Origin: https://zentroverse-automation.vercel.app`
 
 ## Common crash causes
 
