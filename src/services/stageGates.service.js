@@ -1,9 +1,12 @@
 import { ApiError } from '../middleware/errorHandler.middleware.js';
 import { getMacroFromMicroStage, EXIT_MICRO_STAGES, LIFECYCLE_STAGES } from '../constants/stages.js';
+import { assertStageExitAllowsTransition } from './stageExit.service.js';
 
 const microNumber = (stage) => Number(String(stage).split('.')[1] || 0);
 
-export const validateSequentialTransition = (opportunity, newMicroStage) => {
+export const validateSequentialTransition = (opportunity, newMicroStage, { force = false } = {}) => {
+  if (!force) assertStageExitAllowsTransition(opportunity, false);
+
   const current = opportunity.current_micro_stage;
   if (current === newMicroStage) return true;
 

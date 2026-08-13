@@ -3,7 +3,7 @@ import StageHistory from '../models/StageHistory.js';
 import LeadActivity from '../models/LeadActivity.js';
 import { ApiError } from '../middleware/errorHandler.middleware.js';
 import { validateSequentialTransition } from './stageGates.service.js';
-import { getActionPatch } from './actionEngine.service.js';
+import { applyStageMasterDefaults } from './actionEngine.service.js';
 import { publishEvent } from './event.service.js';
 import { getMacroFromMicroStage, LIFECYCLE_STAGES } from '../constants/stages.js';
 
@@ -11,7 +11,7 @@ export const moveStage = async ({ opportunity_id, new_micro_stage, changed_by = 
   const opportunity = await Opportunity.findOne({ opportunity_id });
   if (!opportunity) throw new ApiError(404, 'OPPORTUNITY_NOT_FOUND', 'Opportunity not found');
 
-  if (!force) validateSequentialTransition(opportunity, new_micro_stage);
+  if (!force) validateSequentialTransition(opportunity, new_micro_stage, { force: false });
   if (force && (!reason || reason.length < 10)) throw new ApiError(400, 'FORCE_REASON_REQUIRED', 'Force override requires a reason of at least 10 characters', 'reason');
 
   const fromMicro = opportunity.current_micro_stage;
@@ -19,7 +19,7 @@ export const moveStage = async ({ opportunity_id, new_micro_stage, changed_by = 
   const toStage = getMacroFromMicroStage(new_micro_stage);
   const isLifecycle = LIFECYCLE_STAGES.includes(toStage);
 
-  Object.assign(opportunity, getActionPatch(new_micro_stage), {
+  Object.assign(opportunity, applyStageMasterDefaults(opportunity, new_micro_stage), {
     current_micro_stage: new_micro_stage,
     current_stage: isLifecycle ? null : toStage,
     lifecycle_stage: isLifecycle ? toStage : null,

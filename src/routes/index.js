@@ -14,6 +14,8 @@ import reportsRoutes from './reports.routes.js';
 import accessRoutes from './access.routes.js';
 import adminRoutes from './admin.routes.js';
 import smartfloRoutes from './smartflo.routes.js';
+import actionEngineRoutes from './actionEngine.routes.js';
+import mastersRoutes from './masters.routes.js';
 
 const router = Router();
 
@@ -34,5 +36,9 @@ router.use('/access', accessRoutes);
 router.use('/admin', adminRoutes);
 router.use('/smartflo', smartfloRoutes);
 router.use('/bot', botRoutes);
+
+/** Spec Action Engine + masters (Stage Master / rules / tasks) */
+router.use(actionEngineRoutes);
+router.use('/masters', mastersRoutes);
 
 export default router;

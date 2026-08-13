@@ -42,6 +42,14 @@ VITE_API_URL=http://localhost:8787/api/v1
 | Leads | Import endpoints above |
 | Dashboard / Reports | `/dashboard/summary`, `/reports/pipeline` |
 | Engines | `/engines/contact-health`, scoring, SLA |
+| Action Engine | `/opportunities/:id/action-context`, `/actions`, `/rules`, `/action-engine/events`, `/action-engine/health` |
+| Masters | `/masters/organisations`, branches, products, roles |
+
+### Spec SSOT
+
+- Stage Master (54 stages): `src/constants/stageMaster.js` — regenerate with `node scripts/generate-stage-master.mjs`
+- Rule Engine seeds (14 rules): `src/constants/automationRules.js`
+- Exit-field gates + golden rule enforced on stage transitions
 
 Use `tests/api.http` with the REST Client extension for quick checks.
 
