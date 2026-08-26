@@ -29,6 +29,22 @@ const opportunitySchema = new mongoose.Schema({
   last_activity_at: { type: Date, default: Date.now },
   /** Per-stage manual notes from Lead Detail journey — keyed by micro stage code */
   stage_step_data: { type: mongoose.Schema.Types.Mixed, default: {} },
+
+  smartflo_lead_id: { type: String, default: null, index: true },
+  smartflo_lead_list_id: { type: String, default: null },
+  smartflo_sync_status: { type: String, enum: ['PENDING', 'SYNCED', 'FAILED'], default: undefined },
+  smartflo_sync_error: { type: String, default: null },
+  smartflo_last_synced_at: { type: Date, default: null },
+  smartflo_dial_status: { type: String, default: null },
+  smartflo_disposition: { type: String, default: null },
+  smartflo_sub_disposition: { type: String, default: null },
+  smartflo_external_disposition: { type: String, default: null },
+  smartflo_last_call_id: { type: String, default: null },
+  smartflo_last_call_at: { type: Date, default: null },
+  smartflo_retry_count: { type: Number, default: 0 },
+  callback_at: { type: Date, default: null },
+  callback_note: { type: String, default: null },
+  callback_agent_id: { type: String, default: null },
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
 
 opportunitySchema.pre('validate', function validateStage(next) {

@@ -67,10 +67,16 @@ export const env = {
   /** Max customers/opportunities returned on GET /bootstrap (inbox sync) */
   BOOTSTRAP_MAX_LEADS: Number(process.env.BOOTSTRAP_MAX_LEADS || 10000),
 
-  /** Tata Smartflo IVR — bulk lead list upload (server-side only) */
+  /** Tata Smartflo — token is backend-only, never returned to clients */
   SMARTFLO_API_TOKEN: process.env.SMARTFLO_API_TOKEN,
   SMARTFLO_LEAD_LIST_ID: process.env.SMARTFLO_LEAD_LIST_ID,
   SMARTFLO_BASE_URL: process.env.SMARTFLO_BASE_URL || 'https://api-smartflo.tatateleservices.com',
+  SMARTFLO_API_BASE_URL: process.env.SMARTFLO_API_BASE_URL,
+  SMARTFLO_CAMPAIGN_ID: process.env.SMARTFLO_CAMPAIGN_ID,
+  SMARTFLO_DISPOSITION_LIST_ID: process.env.SMARTFLO_DISPOSITION_LIST_ID,
+  /** dial_out_each_call (default) | session */
+  SMARTFLO_DIALER_MODE: (process.env.SMARTFLO_DIALER_MODE || 'dial_out_each_call').trim().toLowerCase(),
+  SMARTFLO_WEBHOOK_SECRET: process.env.SMARTFLO_WEBHOOK_SECRET,
 
   /** Click-to-Call Support API — API Connect → Click to Call Support API */
   SMARTFLO_CLICK_TO_CALL_API_KEY: process.env.SMARTFLO_CLICK_TO_CALL_API_KEY,
@@ -88,8 +94,30 @@ export const env = {
   SMARTFLO_AGENT_NUMBER: process.env.SMARTFLO_AGENT_NUMBER,
 };
 
+/** Smartflo v1 API root — never includes credentials. */
+export const getSmartfloApiBase = () => {
+  const explicit = env.SMARTFLO_API_BASE_URL?.trim();
+  if (explicit) return explicit.replace(/\/+$/, '');
+  const base = (env.SMARTFLO_BASE_URL || 'https://api-smartflo.tatateleservices.com').replace(/\/+$/, '');
+  return /\/v\d+$/i.test(base) ? base : `${base}/v1`;
+};
+
+export const isDialerSessionMode = () => env.SMARTFLO_DIALER_MODE === 'session';
+
+export const warnSmartfloDialerConfig = () => {
+  const missing = [];
+  if (!env.SMARTFLO_API_TOKEN?.trim()) missing.push('SMARTFLO_API_TOKEN');
+  if (!env.SMARTFLO_LEAD_LIST_ID?.trim()) missing.push('SMARTFLO_LEAD_LIST_ID');
+  if (!env.SMARTFLO_CAMPAIGN_ID?.trim()) missing.push('SMARTFLO_CAMPAIGN_ID');
+  if (!env.SMARTFLO_DISPOSITION_LIST_ID?.trim()) missing.push('SMARTFLO_DISPOSITION_LIST_ID');
+  if (missing.length && env.NODE_ENV !== 'production') {
+    console.warn(`[smartflo] Dialer not fully configured (missing ${missing.join(', ')}). CTC may still work.`);
+  }
+};
+
 export const validateEnv = () => {
   if (!env.MONGODB_URI) throw new Error('MONGODB_URI is required');
+  warnSmartfloDialerConfig();
 };
 
 /** For startup logs — never log credentials */

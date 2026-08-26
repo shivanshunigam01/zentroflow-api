@@ -23,3 +23,11 @@ export const requireAuth = (req, res, next) => {
     return next(new ApiError(401, 'UNAUTHORIZED', 'Invalid token'));
   }
 };
+
+/** JWT must include role=admin. */
+export const requireAdmin = (req, res, next) => {
+  if (req.user?.role !== 'admin') {
+    return next(new ApiError(403, 'FORBIDDEN', 'Admin access required'));
+  }
+  return next();
+};

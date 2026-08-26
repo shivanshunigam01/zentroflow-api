@@ -16,6 +16,8 @@ import adminRoutes from './admin.routes.js';
 import smartfloRoutes from './smartflo.routes.js';
 import actionEngineRoutes from './actionEngine.routes.js';
 import mastersRoutes from './masters.routes.js';
+import dialerRoutes from './dialer.routes.js';
+import smartfloWebhookRoutes from './smartfloWebhook.routes.js';
 
 const router = Router();
 
@@ -23,6 +25,7 @@ router.get('/health', sendHealth);
 
 router.use('/auth', authRoutes);
 router.use('/bootstrap', bootstrapRoutes);
+router.use(smartfloWebhookRoutes);
 router.use(requireAuth);
 
 router.use('/customers', customersRoutes);
@@ -35,6 +38,7 @@ router.use('/reports', reportsRoutes);
 router.use('/access', accessRoutes);
 router.use('/admin', adminRoutes);
 router.use('/smartflo', smartfloRoutes);
+router.use('/dialer', dialerRoutes);
 router.use('/bot', botRoutes);
 
 /** Spec Action Engine + masters (Stage Master / rules / tasks) */

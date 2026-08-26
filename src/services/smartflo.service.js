@@ -6,14 +6,9 @@ import { ApiError } from '../middleware/errorHandler.middleware.js';
 import Customer from '../models/Customer.js';
 import Opportunity from '../models/Opportunity.js';
 import SmartfloSyncLog from '../models/SmartfloSyncLog.js';
+import { smartfloGet, smartfloPost } from './smartflo/smartflo.client.js';
 
 const BATCH_SIZE = 500;
-
-const smartfloHeaders = () => ({
-  Authorization: `Bearer ${env.SMARTFLO_API_TOKEN}`,
-  Accept: 'application/json',
-  'Content-Type': 'application/json',
-});
 
 /** Ensure Smartflo credentials are configured before any API call. */
 export const validateSmartfloConfig = () => {
@@ -95,22 +90,11 @@ export const fetchLeadsForSmartflo = async () => {
 
 /** POST /v1/broadcast/leads/{LEAD_LIST_ID} */
 export const uploadLeadBatch = async (leadListId, data) => {
-  const url = `${env.SMARTFLO_BASE_URL.replace(/\/+$/, '')}/v1/broadcast/leads/${leadListId}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: smartfloHeaders(),
-    body: JSON.stringify({ data, duplicate_option: 'skip' }),
-  });
-
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const message = body?.message || body?.error || `Smartflo upload failed (HTTP ${res.status})`;
-    const err = new ApiError(502, 'SMARTFLO_UPLOAD_FAILED', message);
-    err.smartfloResponse = body;
-    throw err;
-  }
-
-  return body;
+  return smartfloPost(
+    `/broadcast/leads/${leadListId}`,
+    { data, duplicate_option: 'skip' },
+    'uploadLeadBatch',
+  );
 };
 
 /** GET /v1/broadcast/batch_status/{batchId} */
@@ -119,20 +103,11 @@ export const getSmartfloBatchStatus = async (batchId) => {
   if (!batchId?.trim()) {
     throw new ApiError(400, 'INVALID_BATCH_ID', 'batchId is required');
   }
-
-  const url = `${env.SMARTFLO_BASE_URL.replace(/\/+$/, '')}/v1/broadcast/batch_status/${encodeURIComponent(batchId.trim())}`;
-  const res = await fetch(url, { method: 'GET', headers: smartfloHeaders() });
-  const body = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    throw new ApiError(
-      502,
-      'SMARTFLO_STATUS_FAILED',
-      body?.message || body?.error || `Smartflo batch status failed (HTTP ${res.status})`,
-    );
-  }
-
-  return body;
+  return smartfloGet(
+    `/broadcast/batch_status/${encodeURIComponent(batchId.trim())}`,
+    undefined,
+    'batchStatus',
+  );
 };
 
 const extractBatchId = (response) => (

@@ -17,6 +17,10 @@ export const smartfloConfigStatus = asyncHandler(async (_req, res) => {
     configured: isSmartfloConfigured(),
     clickToCallConfigured: isClickToCallConfigured(),
     directAgentCallConfigured: isDirectAgentCallConfigured(),
+    campaignConfigured: Boolean(env.SMARTFLO_CAMPAIGN_ID?.trim()),
+    dispositionConfigured: Boolean(env.SMARTFLO_DISPOSITION_LIST_ID?.trim()),
+    dialerMode: env.SMARTFLO_DIALER_MODE,
+    sessionEnabled: env.SMARTFLO_DIALER_MODE === 'session',
     ivrId: env.SMARTFLO_IVR_ID,
   });
 });

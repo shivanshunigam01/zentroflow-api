@@ -1,13 +1,14 @@
 import http from 'http';
 import app from './src/app.js';
 import { connectDB } from './src/config/db.js';
-import { env } from './src/config/env.js';
+import { env, validateEnv } from './src/config/env.js';
 import { ensureDefaultUser } from './src/services/auth.service.js';
 
 /** 10 minutes — large Excel import/validate (nginx must match proxy_read_timeout). */
 const HTTP_TIMEOUT_MS = 600000;
 
 const startServer = async () => {
+  validateEnv();
   try {
     await connectDB();
     console.log('MongoDB connected');
