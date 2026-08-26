@@ -5,6 +5,7 @@ import {
   bulkSyncValidator,
   campaignPatchValidator,
   dispositionValidator,
+  callsQueryValidator,
   syncLeadIdValidator,
   testSyncValidator,
 } from '../validators/dialer.validator.js';
@@ -52,7 +53,7 @@ router.post('/leads/:id/sync', requireAdmin, syncLeadIdValidator, validate, sync
 router.get('/dispositions', listDialerDispositions);
 router.post('/disposition', dispositionValidator, validate, postDialerDisposition);
 
-router.get('/calls', listDialerCalls);
+router.get('/calls', callsQueryValidator, validate, listDialerCalls);
 router.get('/calls/:id', getDialerCall);
 router.get('/callbacks', listDialerCallbacks);
 

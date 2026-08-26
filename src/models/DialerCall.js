@@ -8,17 +8,19 @@ const dialerCallSchema = new mongoose.Schema({
   smartflo_call_id: { type: String, default: null, sparse: true, unique: true },
   smartflo_uuid: { type: String, default: null, sparse: true, unique: true },
   smartflo_ref_id: { type: String, default: null, index: true },
-  campaign_id: { type: String, default: null },
-  agent_id: { type: String, default: null },
+  smartflo_lead_id: { type: String, default: null, index: true },
+  campaign_id: { type: String, default: null, index: true },
+  agent_id: { type: String, default: null, index: true },
   agent_name: { type: String, default: null },
   caller_id: { type: String, default: null },
   direction: { type: String, default: null },
-  status: { type: String, default: null },
-  disposition: { type: String, default: null },
+  status: { type: String, default: null, index: true },
+  disposition: { type: String, default: null, index: true },
   disposition_code: { type: String, default: null },
   sub_disposition: { type: String, default: null },
   disposition_note: { type: String, default: null },
-  start_time: { type: Date, default: null },
+  start_time: { type: Date, default: null, index: true },
+  answered_at: { type: Date, default: null },
   end_time: { type: Date, default: null },
   duration: { type: Number, default: null },
   recording_ref: { type: String, default: null },
@@ -27,5 +29,7 @@ const dialerCallSchema = new mongoose.Schema({
 
 dialerCallSchema.index({ created_at: -1 });
 dialerCallSchema.index({ opportunity_id: 1, created_at: -1 });
+dialerCallSchema.index({ campaign_id: 1, created_at: -1 });
+dialerCallSchema.index({ agent_id: 1, created_at: -1 });
 
 export default mongoose.model('DialerCall', dialerCallSchema);

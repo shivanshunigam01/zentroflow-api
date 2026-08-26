@@ -28,6 +28,20 @@ export const campaignPatchValidator = [
 ];
 
 export const callsQueryValidator = [
-  query('page').optional().isInt({ min: 1 }),
-  query('limit').optional().isInt({ min: 1, max: 200 }),
+  query('page').optional().isInt({ min: 1 }).toInt(),
+  query('limit').optional().isInt({ min: 1, max: 200 }).toInt(),
+  query('offset').optional().isInt({ min: 0 }).toInt(),
+  query('campaignId').optional().isString().trim().notEmpty(),
+  query('agentId').optional().isString().trim().notEmpty(),
+  query('status').optional().isString().trim().notEmpty(),
+  query('disposition').optional().isString().trim().notEmpty(),
+  query('direction').optional().isString().trim().notEmpty(),
+  query('leadId').optional().isString().trim().notEmpty(),
+  query('callId').optional().isString().trim().notEmpty(),
+  query('search').optional().isString().trim().isLength({ max: 120 }),
+  query('fromDate').optional().isISO8601(),
+  query('toDate').optional().isISO8601(),
+  query('from').optional().isISO8601(),
+  query('to').optional().isISO8601(),
+  query('dateField').optional().isIn(['created_at', 'start_time']),
 ];

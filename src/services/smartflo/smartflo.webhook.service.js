@@ -130,6 +130,7 @@ const upsertCall = async (parsed, opportunity) => {
     customer_number: parsed.customerNumber || undefined,
     smartflo_call_id: parsed.callId || undefined,
     smartflo_uuid: parsed.uuid || undefined,
+    smartflo_lead_id: parsed.smartfloLeadId || opportunity?.smartflo_lead_id || undefined,
     campaign_id: parsed.campaignId || env.SMARTFLO_CAMPAIGN_ID || undefined,
     agent_id: parsed.agentId || undefined,
     agent_name: parsed.agentName || undefined,
@@ -145,6 +146,9 @@ const upsertCall = async (parsed, opportunity) => {
   };
   if (parsed.startTime) patch.start_time = new Date(parsed.startTime);
   if (parsed.endTime) patch.end_time = new Date(parsed.endTime);
+  if (eventStatus === 'IN_CALL' || /connected to agent/i.test(parsed.eventType || '')) {
+    patch.answered_at = parsed.startTime ? new Date(parsed.startTime) : new Date();
+  }
 
   const cleaned = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
   return DialerCall.findOneAndUpdate(filter, { $set: cleaned }, { upsert: true, new: true });
