@@ -22,12 +22,22 @@ export const mapSmartfloError = (err, operation = 'request') => {
   const data = err?.response?.data;
   const upstream = data?.message || data?.error || (typeof data === 'string' ? data : null);
   const safeUpstream = typeof upstream === 'string' ? upstream.slice(0, 280) : null;
+  const lower = String(safeUpstream || '').toLowerCase();
 
   if (!status) {
     if (err?.code === 'ECONNABORTED' || err?.message?.includes('timeout')) {
       return new ApiError(504, 'SMARTFLO_TIMEOUT', `Smartflo ${operation} timed out`);
     }
     return new ApiError(503, 'SMARTFLO_UNAVAILABLE', `Smartflo ${operation} is unavailable`);
+  }
+
+  // Dialer session_call requires the agent to be logged into CloudPhone Dialer Panel first
+  if (/not logged into any campaign|not logged in|login.?based calling|agent.*not.*login/i.test(lower)) {
+    return new ApiError(
+      409,
+      'SMARTFLO_AGENT_NOT_LOGGED_IN',
+      'Log into the Smartflo Dialer Panel first, select the campaign, then click Start Session again.',
+    );
   }
 
   const code = STATUS_CODE[status] || (status >= 500 ? 'SMARTFLO_API_ERROR' : 'SMARTFLO_API_ERROR');

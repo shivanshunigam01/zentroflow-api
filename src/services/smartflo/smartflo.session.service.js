@@ -30,9 +30,7 @@ export const getSessionStatus = async (user) => {
       ? 'Configure SMARTFLO_API_TOKEN and SMARTFLO_CAMPAIGN_ID to start a dialer session.'
       : active
         ? 'Session is active — Smartflo will auto-dial. End Session when finished.'
-        : mode === 'dial_out_each_call'
-          ? 'Dial Out (Each Call): click Start Session to go live, receive the first call, then Smartflo continues auto-dialing.'
-          : 'Session mode is ready. Click Start Session to begin auto-dialing.',
+        : '1) Open Smartflo Dialer Panel and log in to the campaign  2) Click Start Session here  3) Take the first call — autodialer continues.',
   };
 };
 

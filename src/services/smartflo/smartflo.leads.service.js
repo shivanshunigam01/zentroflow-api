@@ -565,7 +565,9 @@ export const syncOpportunityToSmartflo = async (opportunityId) => {
     throw new ApiError(
       err.status || 502,
       err.code || 'SMARTFLO_LEAD_SYNC_FAILED',
-      'Unable to synchronize lead with Smartflo',
+      err.message && err.code !== 'INTERNAL_SERVER_ERROR'
+        ? err.message
+        : 'Unable to synchronize lead with Smartflo',
     );
   }
 };

@@ -61,6 +61,16 @@ describe('smartflo errors', () => {
     assert.equal(sanitized.token, '[redacted]');
     assert.equal(sanitized.ok, true);
   });
+
+  it('maps agent-not-logged-in dialer session errors', () => {
+    const mapped = mapSmartfloError(
+      { response: { status: 422, data: { success: false, message: 'Agent is not logged into any campaign.' } } },
+      'sessionStart',
+    );
+    assert.equal(mapped.code, 'SMARTFLO_AGENT_NOT_LOGGED_IN');
+    assert.equal(mapped.status, 409);
+    assert.match(mapped.message, /Dialer Panel/i);
+  });
 });
 
 describe('webhook parsing and idempotency key', () => {

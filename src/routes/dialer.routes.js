@@ -59,7 +59,7 @@ router.get('/leads/sync/stats', requireAdmin, getDialerLeadSyncStatsHandler);
 router.post('/leads', requireAdmin, createDialerLead);
 router.post('/leads/bulk', requireAdmin, bulkSyncValidator, validate, bulkSyncDialerLeads);
 router.post('/leads/sync', requireAdmin, syncLeadsBodyValidator, validate, syncPendingDialerLeads);
-router.post('/leads/:id/sync', requireAdmin, syncLeadIdValidator, validate, syncDialerLead);
+router.post('/leads/:id/sync', syncLeadIdValidator, validate, syncDialerLead);
 
 router.get('/sync-jobs/:syncId', requireAdmin, syncJobIdValidator, validate, getDialerSyncJob);
 
