@@ -34,7 +34,7 @@ export const sanitizeCampaign = (raw = {}) => {
     dispositionListIdMasked: maskId(env.SMARTFLO_DISPOSITION_LIST_ID),
     callerIdConfigured: Boolean(env.SMARTFLO_CALLER_ID?.trim()),
     dialerMode: env.SMARTFLO_DIALER_MODE,
-    sessionEnabled: env.SMARTFLO_DIALER_MODE === 'session',
+    sessionEnabled: Boolean(env.SMARTFLO_API_TOKEN?.trim() && env.SMARTFLO_CAMPAIGN_ID?.trim()),
     agentCount: Number(raw.agent_count ?? raw.agents ?? raw.active_agents ?? 0) || 0,
     leadCount: Number(raw.lead_count ?? raw.total_leads ?? raw.leads ?? 0) || 0,
     newLeadCount: Number(raw.new_leads ?? raw.available_leads ?? raw.pending_leads ?? 0) || 0,

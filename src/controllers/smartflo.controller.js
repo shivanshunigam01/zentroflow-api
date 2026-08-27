@@ -20,7 +20,7 @@ export const smartfloConfigStatus = asyncHandler(async (_req, res) => {
     campaignConfigured: Boolean(env.SMARTFLO_CAMPAIGN_ID?.trim()),
     dispositionConfigured: Boolean(env.SMARTFLO_DISPOSITION_LIST_ID?.trim()),
     dialerMode: env.SMARTFLO_DIALER_MODE,
-    sessionEnabled: env.SMARTFLO_DIALER_MODE === 'session',
+    sessionEnabled: Boolean(env.SMARTFLO_API_TOKEN?.trim() && env.SMARTFLO_CAMPAIGN_ID?.trim()),
     callerIdConfigured: Boolean(env.SMARTFLO_CALLER_ID?.trim()),
     // Destination IVR is configured on the Support API key in Smartflo — never expose the key
   });

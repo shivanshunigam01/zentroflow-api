@@ -74,8 +74,8 @@ export const env = {
   SMARTFLO_API_BASE_URL: process.env.SMARTFLO_API_BASE_URL,
   SMARTFLO_CAMPAIGN_ID: process.env.SMARTFLO_CAMPAIGN_ID,
   SMARTFLO_DISPOSITION_LIST_ID: process.env.SMARTFLO_DISPOSITION_LIST_ID,
-  /** dial_out_each_call | session — default session so Autodialer Start Session is enabled */
-  SMARTFLO_DIALER_MODE: (process.env.SMARTFLO_DIALER_MODE || 'session').trim().toLowerCase(),
+  /** dial_out_each_call (Smartflo Dial Out Each Call) | session — Start Session works for both when campaign is configured */
+  SMARTFLO_DIALER_MODE: (process.env.SMARTFLO_DIALER_MODE || 'dial_out_each_call').trim().toLowerCase(),
   SMARTFLO_WEBHOOK_SECRET: process.env.SMARTFLO_WEBHOOK_SECRET,
   /** Bulk lead upload batch size (Smartflo broadcast leads API) */
   SMARTFLO_SYNC_BATCH_SIZE: Math.min(Math.max(Number(process.env.SMARTFLO_SYNC_BATCH_SIZE || 500), 1), 500),

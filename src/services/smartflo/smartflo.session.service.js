@@ -1,20 +1,19 @@
-import { env, isDialerSessionMode } from '../../config/env.js';
+import { env } from '../../config/env.js';
 import { ApiError } from '../../middleware/errorHandler.middleware.js';
 import DialerAgentSession from '../../models/DialerAgentSession.js';
 import { smartfloPost } from './smartflo.client.js';
 import { writeDialerAudit } from './smartflo.audit.service.js';
 
-const sessionDisabled = () => new ApiError(
-  409,
-  'SMARTFLO_SESSION_DISABLED',
-  'This campaign uses Dial Out (Each Call). Log into the Smartflo Dialer Panel instead of starting a session from ZentroFLOW.',
-);
-
 const userKey = (user) => String(user?.userId || user?.id || user?.email || 'unknown');
+
+/** Start Session is available whenever campaign + token are set (Dial Out Each Call or session). */
+export const isSessionStartEnabled = () => Boolean(
+  env.SMARTFLO_API_TOKEN?.trim() && env.SMARTFLO_CAMPAIGN_ID?.trim(),
+);
 
 export const getSessionStatus = async (user) => {
   const mode = env.SMARTFLO_DIALER_MODE;
-  const sessionEnabled = isDialerSessionMode();
+  const sessionEnabled = isSessionStartEnabled();
   const doc = await DialerAgentSession.findOne({ user_id: userKey(user) }).lean();
   const status = doc?.status || 'OFFLINE';
   const active = sessionEnabled && ['IN_SESSION', 'IN_CALL', 'WRAP_UP', 'READY', 'PAUSED'].includes(status);
@@ -27,14 +26,20 @@ export const getSessionStatus = async (user) => {
     startedAt: doc?.started_at || null,
     endedAt: doc?.ended_at || null,
     agentId: userKey(user),
-    message: sessionEnabled
-      ? (active ? 'Session is active.' : 'Session APIs are enabled. Start a session to begin auto-dialing.')
-      : 'Calling is handled by the Smartflo Dialer Panel.',
+    message: !sessionEnabled
+      ? 'Configure SMARTFLO_API_TOKEN and SMARTFLO_CAMPAIGN_ID to start a dialer session.'
+      : active
+        ? 'Session is active — Smartflo will auto-dial. End Session when finished.'
+        : mode === 'dial_out_each_call'
+          ? 'Dial Out (Each Call): click Start Session to go live, receive the first call, then Smartflo continues auto-dialing.'
+          : 'Session mode is ready. Click Start Session to begin auto-dialing.',
   };
 };
 
-const requireSessionMode = () => {
-  if (!isDialerSessionMode()) throw sessionDisabled();
+const requireSessionReady = () => {
+  if (!env.SMARTFLO_API_TOKEN?.trim()) {
+    throw new ApiError(503, 'SMARTFLO_NOT_CONFIGURED', 'Smartflo API token is not configured');
+  }
   if (!env.SMARTFLO_CAMPAIGN_ID?.trim()) {
     throw new ApiError(503, 'SMARTFLO_NOT_CONFIGURED', 'Smartflo campaign is not configured');
   }
@@ -47,7 +52,7 @@ const persist = async (user, patch) => DialerAgentSession.findOneAndUpdate(
 );
 
 export const startDialerSession = async (user) => {
-  requireSessionMode();
+  requireSessionReady();
   const campaignId = env.SMARTFLO_CAMPAIGN_ID.trim();
   const data = await smartfloPost(
     '/dialer/session_call',
@@ -60,13 +65,19 @@ export const startDialerSession = async (user) => {
     action: 'session.started',
     entity: 'campaign',
     entityId: campaignId,
+    metadata: { dialerMode: env.SMARTFLO_DIALER_MODE },
   });
-  console.log(JSON.stringify({ service: 'smartflo', operation: 'dialer.session.start', status: 'success' }));
-  return { status: 'IN_SESSION', active: true, smartflo: data };
+  console.log(JSON.stringify({
+    service: 'smartflo',
+    operation: 'dialer.session.start',
+    dialerMode: env.SMARTFLO_DIALER_MODE,
+    status: 'success',
+  }));
+  return { status: 'IN_SESSION', active: true, dialerMode: env.SMARTFLO_DIALER_MODE, smartflo: data };
 };
 
 export const endDialerSession = async (user) => {
-  requireSessionMode();
+  requireSessionReady();
   const campaignId = env.SMARTFLO_CAMPAIGN_ID.trim();
   const data = await smartfloPost(
     '/dialer/session_call',
@@ -85,7 +96,7 @@ export const endDialerSession = async (user) => {
 };
 
 export const logoutDialerSession = async (user) => {
-  requireSessionMode();
+  requireSessionReady();
   const campaignId = env.SMARTFLO_CAMPAIGN_ID.trim();
   const data = await smartfloPost(
     '/dialer/logout',
