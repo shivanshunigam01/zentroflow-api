@@ -78,11 +78,13 @@ export const listDialerLeads = asyncHandler(async (req, res) => {
 });
 
 export const syncDialerLead = asyncHandler(async (req, res) => {
-  ok(res, await syncOpportunityToSmartflo(req.params.id));
+  const resync = req.body?.resync === true || req.query?.resync === 'true';
+  ok(res, await syncOpportunityToSmartflo(req.params.id, { resync }));
 });
 
 export const syncPendingDialerLeads = asyncHandler(async (req, res) => {
   const actor = req.user?.email || req.user?.name || 'Admin';
+  const resync = req.body?.resync === true;
   if (req.body?.syncAll === true) {
     ok(res, await syncAllLeadsToSmartflo(actor));
     return;
@@ -92,10 +94,47 @@ export const syncPendingDialerLeads = asyncHandler(async (req, res) => {
     return;
   }
   if (Array.isArray(req.body?.leadIds) && req.body.leadIds.length > 0) {
-    ok(res, await syncSelectedLeads(req.body.leadIds, actor));
+    ok(res, await syncSelectedLeads(req.body.leadIds, actor, { resync }));
     return;
   }
   ok(res, await syncPendingLeads(200, actor));
+});
+
+/** Wishlist alias: POST /dialer/leads/sync-all */
+export const syncAllDialerLeadsHandler = asyncHandler(async (req, res) => {
+  const actor = req.user?.email || req.user?.name || 'Admin';
+  const result = await syncAllLeadsToSmartflo(actor);
+  ok(res, {
+    success: result.success !== false && result.failed === 0,
+    total: result.total,
+    synced: result.uploaded,
+    uploaded: result.uploaded,
+    failed: result.failed,
+    alreadySynced: result.alreadySynced,
+    invalid: result.invalid,
+    skipped: result.skipped,
+    syncId: result.syncId,
+    status: result.status,
+    batchResults: result.batchResults,
+  });
+});
+
+/** Wishlist alias: GET /dialer/lead-list → configured list + remote lists */
+export const getConfiguredLeadList = asyncHandler(async (_req, res) => {
+  const lists = await fetchLeadLists();
+  const configuredId = env.SMARTFLO_LEAD_LIST_ID?.trim() || null;
+  ok(res, {
+    configuredLeadListId: configuredId,
+    lists,
+  });
+});
+
+/** Wishlist alias: GET /dialer/lead-list/leads → leads in env SMARTFLO_LEAD_LIST_ID */
+export const listConfiguredLeadListLeads = asyncHandler(async (_req, res) => {
+  if (!env.SMARTFLO_LEAD_LIST_ID?.trim()) {
+    throw new ApiError(503, 'SMARTFLO_NOT_CONFIGURED', 'Smartflo lead list is not configured');
+  }
+  ok(res, await fetchLeadsInList(env.SMARTFLO_LEAD_LIST_ID.trim()));
 });
 
 export const getDialerLeadSyncStatsHandler = asyncHandler(async (_req, res) => {
@@ -115,7 +154,11 @@ export const getDialerCurrentCall = asyncHandler(async (req, res) => {
 });
 
 export const bulkSyncDialerLeads = asyncHandler(async (req, res) => {
-  ok(res, await syncSelectedLeads(req.body.leadIds, req.user?.email || req.user?.name || 'Admin'));
+  ok(res, await syncSelectedLeads(
+    req.body.leadIds,
+    req.user?.email || req.user?.name || 'Admin',
+    { resync: req.body?.resync === true },
+  ));
 });
 
 export const testSyncLead = asyncHandler(async (req, res) => {

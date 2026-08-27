@@ -132,7 +132,8 @@ const markFailed = async (opportunity, message) => {
   await opportunity.save();
 };
 
-const isAlreadySynced = (opportunity) => (
+/** True when ZentroFLOW already has a successful Smartflo sync record (skip unless resync). */
+export const isAlreadySynced = (opportunity) => (
   opportunity.smartflo_sync_status === 'SYNCED' && Boolean(opportunity.smartflo_lead_id)
 );
 
@@ -502,10 +503,25 @@ export const syncAllLeadsToSmartflo = async (changedBy = 'System') => {
 
 /**
  * Upload one ZentroFLOW opportunity to the configured Smartflo list.
+ * @param {string} opportunityId
+ * @param {{ resync?: boolean }} [options]
  */
-export const syncOpportunityToSmartflo = async (opportunityId) => {
+export const syncOpportunityToSmartflo = async (opportunityId, options = {}) => {
+  const { resync = false } = options;
   const opportunity = await findOpportunityByDialerId(opportunityId);
   if (!opportunity) throw new ApiError(404, 'LEAD_NOT_FOUND', 'ZentroFLOW lead not found');
+
+  if (!resync && isAlreadySynced(opportunity)) {
+    return {
+      opportunity_id: opportunity.opportunity_id,
+      lead_id: opportunity.lead_id,
+      smartflo_lead_id: opportunity.smartflo_lead_id,
+      smartflo_lead_list_id: opportunity.smartflo_lead_list_id,
+      smartflo_sync_status: 'SYNCED',
+      result: 'already_synced',
+      skipped: true,
+    };
+  }
 
   const customer = await Customer.findOne({ customer_id: opportunity.customer_id });
   if (!customer) throw new ApiError(404, 'CUSTOMER_NOT_FOUND', 'Customer not found for this lead');
@@ -518,6 +534,10 @@ export const syncOpportunityToSmartflo = async (opportunityId) => {
     await markFailed(opportunity, err.message);
     throw err;
   }
+
+  opportunity.smartflo_sync_status = 'SYNCING';
+  opportunity.smartflo_sync_error = null;
+  await opportunity.save();
 
   try {
     const response = await uploadSingleSmartfloLead(row, targetList);
@@ -542,6 +562,7 @@ export const syncOpportunityToSmartflo = async (opportunityId) => {
       leadId: opportunity.opportunity_id,
       smartfloListId: targetList,
       status: 'success',
+      resync: Boolean(resync),
     }));
 
     return {
@@ -551,6 +572,7 @@ export const syncOpportunityToSmartflo = async (opportunityId) => {
       smartflo_lead_list_id: targetList,
       smartflo_sync_status: 'SYNCED',
       result: 'synced',
+      skipped: false,
     };
   } catch (err) {
     await markFailed(opportunity, err.message);
@@ -647,21 +669,23 @@ export const syncFailedLeads = async (limit = 200, changedBy = 'System') => {
   };
 };
 
-export const syncSelectedLeads = async (ids = [], changedBy = 'System') => {
+export const syncSelectedLeads = async (ids = [], changedBy = 'System', options = {}) => {
   if (!Array.isArray(ids) || ids.length === 0) {
     throw new ApiError(400, 'VALIDATION_ERROR', 'leadIds is required');
   }
+  const { resync = false } = options;
   const syncId = randomUUID();
   const results = [];
   for (const id of ids) {
     try {
-      results.push(await syncOpportunityToSmartflo(id));
+      results.push(await syncOpportunityToSmartflo(id, { resync }));
     } catch (err) {
-      results.push({ opportunity_id: id, smartflo_sync_status: 'FAILED', error: err.message });
+      results.push({ opportunity_id: id, smartflo_sync_status: 'FAILED', error: err.message, result: 'failed' });
     }
   }
-  const uploaded = results.filter((r) => r.smartflo_sync_status === 'SYNCED' || r.result === 'synced').length;
-  const failedCount = results.length - uploaded;
+  const uploaded = results.filter((r) => r.result === 'synced').length;
+  const alreadySynced = results.filter((r) => r.result === 'already_synced' || r.skipped).length;
+  const failedCount = results.filter((r) => r.smartflo_sync_status === 'FAILED' || r.result === 'failed').length;
   await SmartfloSyncLog.create({
     sync_id: syncId,
     sync_type: 'dialer_selected',
@@ -670,6 +694,8 @@ export const syncSelectedLeads = async (ids = [], changedBy = 'System') => {
     eligible: ids.length,
     uploaded,
     failed: failedCount,
+    already_synced: alreadySynced,
+    skipped: alreadySynced,
     created_by: changedBy,
   });
   await writeDialerAudit({
@@ -677,13 +703,17 @@ export const syncSelectedLeads = async (ids = [], changedBy = 'System') => {
     action: 'sync.selected',
     entity: 'sync',
     entityId: syncId,
-    metadata: { total: ids.length, uploaded, failed: failedCount },
+    metadata: { total: ids.length, uploaded, failed: failedCount, alreadySynced, resync },
   });
   return {
+    success: failedCount === 0,
     syncId,
     total: ids.length,
+    synced: uploaded,
     uploaded,
     failed: failedCount,
+    alreadySynced,
+    skipped: alreadySynced,
     results,
     status: failedCount === 0 ? 'COMPLETED' : 'PARTIAL',
   };

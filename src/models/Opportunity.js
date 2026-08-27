@@ -32,7 +32,7 @@ const opportunitySchema = new mongoose.Schema({
 
   smartflo_lead_id: { type: String, default: null, index: true },
   smartflo_lead_list_id: { type: String, default: null },
-  smartflo_sync_status: { type: String, enum: ['PENDING', 'SYNCED', 'FAILED'], default: undefined },
+  smartflo_sync_status: { type: String, enum: ['PENDING', 'SYNCING', 'SYNCED', 'FAILED', 'SKIPPED'], default: undefined },
   smartflo_sync_error: { type: String, default: null },
   smartflo_last_synced_at: { type: Date, default: null },
   smartflo_dial_status: { type: String, default: null },

@@ -11,6 +11,7 @@ export const syncJobIdValidator = [
 export const bulkSyncValidator = [
   body('leadIds').isArray({ min: 1 }).withMessage('leadIds must be a non-empty array'),
   body('leadIds.*').isString().notEmpty(),
+  body('resync').optional().isBoolean().withMessage('resync must be a boolean'),
 ];
 
 export const testSyncValidator = [
@@ -38,8 +39,13 @@ export const campaignPatchValidator = [
 export const syncLeadsBodyValidator = [
   body('syncAll').optional().isBoolean().withMessage('syncAll must be a boolean'),
   body('retryFailed').optional().isBoolean().withMessage('retryFailed must be a boolean'),
+  body('resync').optional().isBoolean().withMessage('resync must be a boolean'),
   body('leadIds').optional().isArray().withMessage('leadIds must be an array'),
   body('leadIds.*').optional().isString().notEmpty(),
+];
+
+export const syncLeadBodyOptionalValidator = [
+  body('resync').optional().isBoolean(),
 ];
 
 export const callsQueryValidator = [
