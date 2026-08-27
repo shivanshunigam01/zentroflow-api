@@ -21,7 +21,8 @@ export const smartfloConfigStatus = asyncHandler(async (_req, res) => {
     dispositionConfigured: Boolean(env.SMARTFLO_DISPOSITION_LIST_ID?.trim()),
     dialerMode: env.SMARTFLO_DIALER_MODE,
     sessionEnabled: env.SMARTFLO_DIALER_MODE === 'session',
-    ivrId: env.SMARTFLO_IVR_ID,
+    callerIdConfigured: Boolean(env.SMARTFLO_CALLER_ID?.trim()),
+    // Destination IVR is configured on the Support API key in Smartflo — never expose the key
   });
 });
 
@@ -43,13 +44,14 @@ export const smartfloBatchStatus = asyncHandler(async (req, res) => {
   });
 });
 
-/** POST /smartflo/call — trigger IVR click-to-call support (unchanged) */
+/** POST /smartflo/call — Click-to-Call Support (customer-first → IVR/destination on API key) */
 export const smartfloClickToCall = asyncHandler(async (req, res) => {
-  console.log('[Smartflo CTC] Controller body:', req.body);
+  // Ignore client-supplied ivrId — destination is bound to SMARTFLO_CLICK_TO_CALL_API_KEY
   const result = await initiateClickToCall(req.body.phoneNumber, {
     opportunityId: req.body.opportunityId,
     customerName: req.body.customerName,
     requestedBy: req.user?.name || req.user?.email || 'User',
+    source: 'zentroflow_ivr',
   });
   ok(res, result);
 });

@@ -200,28 +200,36 @@ export const getSyncLogByBatchId = async (batchId) => {
 };
 
 // ---------------------------------------------------------------------------
-// Click-to-Call Support API
+// Click-to-Call Support API (IVR outbound)
 // Docs: https://docs.smartflo.tatatelebusiness.com/reference/v1click_to_call_support
 //
-// Test (local, with API_PREFIX=/api/v1):
-// curl -X POST http://localhost:8787/api/v1/smartflo/call \
-//   -H "Content-Type: application/json" \
-//   -H "Authorization: Bearer YOUR_JWT" \
-//   -d '{"phoneNumber":"917247650665"}'
+// Destination (IVR / agent / department) is bound to SMARTFLO_CLICK_TO_CALL_API_KEY
+// in the Smartflo panel — do NOT send ivrId in the request body.
+//
+// Auth: Authorization: Bearer SMARTFLO_API_TOKEN
+// Body: { api_key, customer_number, async: 1, caller_id?, custom_identifier? }
 // ---------------------------------------------------------------------------
 
-/** Validate Click-to-Call env (API key + IVR id). */
+const maskPhone = (value = '') => {
+  const digits = String(value).replace(/\D/g, '');
+  if (digits.length < 4) return '****';
+  return `${'*'.repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`;
+};
+
+const alphanumericId = (value) => String(value || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 64);
+
+/** Validate Click-to-Call Support env (token + Support API key). IVR destination lives on the key. */
 export const validateClickToCallConfig = () => {
+  if (!env.SMARTFLO_API_TOKEN?.trim()) {
+    throw new ApiError(503, 'SMARTFLO_NOT_CONFIGURED', 'Set SMARTFLO_API_TOKEN in server .env');
+  }
   if (!env.SMARTFLO_CLICK_TO_CALL_API_KEY?.trim()) {
     throw new ApiError(503, 'SMARTFLO_CTC_NOT_CONFIGURED', 'Set SMARTFLO_CLICK_TO_CALL_API_KEY in server .env');
-  }
-  if (!env.SMARTFLO_IVR_ID?.trim()) {
-    throw new ApiError(503, 'SMARTFLO_CTC_NOT_CONFIGURED', 'Set SMARTFLO_IVR_ID in server .env');
   }
 };
 
 export const isClickToCallConfigured = () => Boolean(
-  env.SMARTFLO_CLICK_TO_CALL_API_KEY?.trim() && env.SMARTFLO_IVR_ID?.trim(),
+  env.SMARTFLO_API_TOKEN?.trim() && env.SMARTFLO_CLICK_TO_CALL_API_KEY?.trim(),
 );
 
 /**
@@ -246,15 +254,16 @@ export const normalizePhoneForSmartfloCall = (phoneNumber = '') => {
 
 export const validateClickToCallPhone = (phoneNumber) => {
   if (!phoneNumber || !String(phoneNumber).trim()) {
-    throw new ApiError(400, 'INVALID_PHONE', 'phoneNumber is required', 'phoneNumber');
+    throw new ApiError(400, 'SMARTFLO_INVALID_NUMBER', 'phoneNumber is required', 'phoneNumber');
   }
 
   const normalized = normalizePhoneForSmartfloCall(phoneNumber);
-  if (!/^91[6-9]\d{9}$/.test(normalized)) {
+  // Smartflo CTC: customer_number must be 10–12 digits (91XXXXXXXXXX = 12)
+  if (!/^\d{10,12}$/.test(normalized) || !/^91[6-9]\d{9}$/.test(normalized)) {
     throw new ApiError(
       400,
-      'INVALID_PHONE',
-      'phoneNumber must be a valid Indian mobile (+91 / 10-digit / 91XXXXXXXXXX)',
+      'SMARTFLO_INVALID_NUMBER',
+      'phoneNumber must be a valid Indian mobile (10-digit / 91XXXXXXXXXX)',
       'phoneNumber',
     );
   }
@@ -263,15 +272,12 @@ export const validateClickToCallPhone = (phoneNumber) => {
 };
 
 /**
- * Build Smartflo Click-to-Call request body.
- * TODO: Confirm Smartflo Click-to-Call endpoint and payload from Smartflo docs/panel
- *       if your account uses a different field layout than click_to_call_support.
- *
- * Support API uses api_key + customer_number (IVR/agent routing is tied to the API key in panel).
+ * Documented Click-to-Call Support body.
+ * Do not send ivrId — destination is configured on the Support API key in Smartflo.
  */
-export function buildClickToCallPayload(customerNumber) {
+export function buildClickToCallPayload(customerNumber, meta = {}) {
   const payload = {
-    api_key: env.SMARTFLO_CLICK_TO_CALL_API_KEY,
+    api_key: env.SMARTFLO_CLICK_TO_CALL_API_KEY.trim(),
     customer_number: customerNumber,
     async: 1,
   };
@@ -280,66 +286,195 @@ export function buildClickToCallPayload(customerNumber) {
     payload.caller_id = env.SMARTFLO_CALLER_ID.trim();
   }
 
-  if (env.SMARTFLO_IVR_ID?.trim()) {
-    payload.custom_identifier = `ivr:${env.SMARTFLO_IVR_ID.trim()}`;
+  const custom = {};
+  const oppId = alphanumericId(meta.opportunityId);
+  if (oppId) custom.opportunity_id = oppId;
+  const source = alphanumericId(meta.source || 'zentroflow');
+  if (source) custom.source = source;
+  if (Object.keys(custom).length) {
+    payload.custom_identifier = custom;
   }
 
   return payload;
-};
+}
 
 export const getClickToCallUrl = () => {
-  const base = env.SMARTFLO_BASE_URL.replace(/\/+$/, '');
-  const path = env.SMARTFLO_CLICK_TO_CALL_ENDPOINT.startsWith('/')
-    ? env.SMARTFLO_CLICK_TO_CALL_ENDPOINT
-    : `/${env.SMARTFLO_CLICK_TO_CALL_ENDPOINT}`;
+  const base = (env.SMARTFLO_API_BASE_URL?.trim()
+    || `${(env.SMARTFLO_BASE_URL || 'https://api-smartflo.tatateleservices.com').replace(/\/+$/, '')}/v1`
+  ).replace(/\/+$/, '');
+  // Prefer path-only endpoint under v1 API root
+  let path = env.SMARTFLO_CLICK_TO_CALL_ENDPOINT || '/v1/click_to_call_support';
+  if (!path.startsWith('/')) path = `/${path}`;
+  // If base already ends with /v1 and path starts with /v1/, drop duplicate
+  if (/\/v\d+$/i.test(base) && /^\/v\d+\//i.test(path)) {
+    path = path.replace(/^\/v\d+/, '');
+  }
   return `${base}${path}`;
 };
 
-/** Trigger Smartflo IVR click-to-call for one lead phone number. */
+/** Map Smartflo CTC errors → stable ZentroFLOW codes (preserve Smartflo message in logs). */
+export const mapClickToCallError = (err) => {
+  const status = err.response?.status;
+  const data = err.response?.data;
+  const fieldMsg = Array.isArray(data?.customer_number) ? data.customer_number[0] : null;
+  const rawMessage = String(
+    fieldMsg
+    || data?.message
+    || data?.error
+    || (typeof data === 'string' ? data : '')
+    || err.message
+    || 'Smartflo click-to-call failed',
+  ).trim();
+  const lower = rawMessage.toLowerCase();
+
+  if (err.code === 'ECONNABORTED' || /timeout/i.test(err.message || '')) {
+    return { code: 'SMARTFLO_TIMEOUT', status: 504, message: 'Smartflo request timed out', smartfloMessage: rawMessage };
+  }
+  if (/caller[_\s-]?id|provide a valid caller/i.test(lower)) {
+    return { code: 'SMARTFLO_INVALID_CALLER_ID', status: 400, message: 'Invalid or unconfigured Smartflo caller ID (DID)', smartfloMessage: rawMessage };
+  }
+  if (/customer number|between 10 and 12|invalid number|destination number/i.test(lower)) {
+    return { code: 'SMARTFLO_INVALID_NUMBER', status: 400, message: 'Invalid customer number for Smartflo', smartfloMessage: rawMessage };
+  }
+  if (/inactive|account.*disabled|account.*suspend/i.test(lower)) {
+    return { code: 'SMARTFLO_ACCOUNT_INACTIVE', status: 403, message: 'Smartflo account is inactive', smartfloMessage: rawMessage };
+  }
+  if (
+    status === 401
+    || status === 403
+    || /api[_\s-]?key|unauthorized|invalid details|authentication|token/i.test(lower)
+  ) {
+    return { code: 'SMARTFLO_INVALID_API_KEY', status: status === 403 ? 403 : 401, message: 'Invalid Smartflo API token or Click-to-Call Support API key', smartfloMessage: rawMessage };
+  }
+  if (/unable to process|originate failed|failed/i.test(lower)) {
+    return { code: 'SMARTFLO_CALL_FAILED', status: 502, message: rawMessage || 'Smartflo could not process the call request', smartfloMessage: rawMessage };
+  }
+  return {
+    code: 'SMARTFLO_CALL_FAILED',
+    status: status && status >= 400 ? Math.min(status, 502) : 502,
+    message: rawMessage || 'Smartflo call request failed',
+    smartfloMessage: rawMessage,
+  };
+};
+
+/**
+ * Trigger Smartflo Click-to-Call Support (customer-first → destination on API key).
+ * Success only means the request was accepted — store ref_id for webhook correlation.
+ */
 export const initiateClickToCall = async (phoneNumber, meta = {}) => {
   validateClickToCallConfig();
   const normalized = validateClickToCallPhone(phoneNumber);
   const url = getClickToCallUrl();
-  const payload = buildClickToCallPayload(normalized);
+  const payload = buildClickToCallPayload(normalized, meta);
 
-  console.log('[Smartflo CTC] Incoming request body:', { phoneNumber, ...meta });
-  console.log('[Smartflo CTC] Normalized phone number:', normalized);
-  console.log('[Smartflo CTC] Smartflo API URL:', url);
-  console.log('[Smartflo CTC] Smartflo request payload:', {
-    ...payload,
-    api_key: payload.api_key ? '***redacted***' : undefined,
-  });
+  console.log(JSON.stringify({
+    service: 'smartflo',
+    operation: 'click_to_call_support.request',
+    url,
+    phoneMasked: maskPhone(normalized),
+    hasCallerId: Boolean(payload.caller_id),
+    hasCustomIdentifier: Boolean(payload.custom_identifier),
+    opportunityId: meta.opportunityId ? alphanumericId(meta.opportunityId) : null,
+  }));
 
+  let data;
+  let httpStatus;
   try {
-    const { data, status } = await axios.post(url, payload, {
+    const response = await axios.post(url, payload, {
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${env.SMARTFLO_API_TOKEN.trim()}`,
       },
       timeout: 30000,
     });
-
-    console.log('[Smartflo CTC] Smartflo success response:', { status, data });
-
-    return {
-      success: data?.success !== false,
-      message: data?.message ?? 'Call originated successfully',
-      phoneNumber: normalized,
-      ivrId: env.SMARTFLO_IVR_ID,
-      smartflo: data,
-    };
+    data = response.data;
+    httpStatus = response.status;
   } catch (err) {
-    const status = err.response?.status;
-    const data = err.response?.data;
-    console.error('[Smartflo CTC] Smartflo error response:', { status, data, message: err.message });
-
-    const message = data?.message
-      || data?.error
-      || err.message
-      || 'Smartflo click-to-call failed';
-
-    throw new ApiError(502, 'SMARTFLO_CTC_FAILED', message, 'phoneNumber');
+    const mapped = mapClickToCallError(err);
+    console.error(JSON.stringify({
+      service: 'smartflo',
+      operation: 'click_to_call_support.error',
+      code: mapped.code,
+      httpStatus: err.response?.status || null,
+      smartfloMessage: mapped.smartfloMessage,
+      phoneMasked: maskPhone(normalized),
+    }));
+    throw new ApiError(mapped.status, mapped.code, mapped.message, 'phoneNumber');
   }
+
+  if (data?.success === false) {
+    const mapped = mapClickToCallError({
+      response: { status: httpStatus || 400, data },
+      message: data?.message || 'Unable to process this request',
+    });
+    console.error(JSON.stringify({
+      service: 'smartflo',
+      operation: 'click_to_call_support.rejected',
+      code: mapped.code,
+      httpStatus,
+      smartfloMessage: mapped.smartfloMessage,
+      phoneMasked: maskPhone(normalized),
+    }));
+    throw new ApiError(mapped.status, mapped.code, mapped.message, 'phoneNumber');
+  }
+
+  const refId = String(data?.ref_id || data?.refId || '').trim() || null;
+
+  console.log(JSON.stringify({
+    service: 'smartflo',
+    operation: 'click_to_call_support.accepted',
+    httpStatus,
+    refId,
+    phoneMasked: maskPhone(normalized),
+    message: data?.message || null,
+  }));
+
+  // Persist acceptance row for webhook correlation (answered / missed / completed / failed)
+  try {
+    const DialerCall = (await import('../models/DialerCall.js')).default;
+    const Opportunity = (await import('../models/Opportunity.js')).default;
+    let opportunity = null;
+    if (meta.opportunityId) {
+      opportunity = await Opportunity.findOne({
+        $or: [
+          { opportunity_id: meta.opportunityId },
+          { lead_id: meta.opportunityId },
+        ],
+      });
+    }
+    await DialerCall.create({
+      opportunity_id: opportunity?.opportunity_id || meta.opportunityId || null,
+      lead_id: opportunity?.lead_id || null,
+      customer_id: opportunity?.customer_id || null,
+      customer_number: normalized,
+      smartflo_ref_id: refId,
+      smartflo_uuid: refId,
+      caller_id: payload.caller_id || env.SMARTFLO_CALLER_ID || null,
+      direction: 'outbound',
+      status: 'ACCEPTED',
+      raw_event_ref: 'click_to_call_support',
+    });
+  } catch (persistErr) {
+    console.error(JSON.stringify({
+      service: 'smartflo',
+      operation: 'click_to_call_support.persist',
+      status: 'failed',
+      message: persistErr.message,
+      refId,
+    }));
+  }
+
+  return {
+    success: true,
+    message: data?.message || 'Originate successfully queued',
+    phoneNumber: normalized,
+    call: {
+      refId,
+      phoneNumber: normalized,
+      status: 'ACCEPTED',
+    },
+  };
 };
 
 // ---------------------------------------------------------------------------
@@ -437,31 +572,40 @@ export const initiateDirectAgentCall = async (phoneNumber, meta = {}) => {
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
+          ...(env.SMARTFLO_API_TOKEN?.trim()
+            ? { Authorization: `Bearer ${env.SMARTFLO_API_TOKEN.trim()}` }
+            : {}),
         },
         timeout: 30000,
       });
 
-      console.log('[Smartflo Agent CTC] Smartflo success response:', { status, data });
+      console.log(JSON.stringify({
+        service: 'smartflo',
+        operation: 'agent_click_to_call_support.accepted',
+        httpStatus: status,
+        refId: data?.ref_id || null,
+      }));
 
       return {
         success: data?.success !== false,
         message: data?.message ?? 'Call originated successfully',
         phoneNumber: normalized,
         agentNumber: env.SMARTFLO_AGENT_NUMBER || env.SMARTFLO_CALLER_ID,
-        smartflo: data,
+        call: {
+          refId: data?.ref_id || null,
+          phoneNumber: normalized,
+          status: 'ACCEPTED',
+        },
       };
     } catch (err) {
-      const status = err.response?.status;
-      const data = err.response?.data;
-      console.error('[Smartflo Agent CTC] Smartflo error response:', { status, data, message: err.message });
-
-      const message = data?.message
-        || data?.error
-        || (typeof data?.caller_id === 'string' ? data.caller_id : null)
-        || err.message
-        || 'Smartflo direct agent call failed';
-
-      throw new ApiError(502, 'SMARTFLO_AGENT_CTC_FAILED', message, 'phoneNumber');
+      const mapped = mapClickToCallError(err);
+      console.error(JSON.stringify({
+        service: 'smartflo',
+        operation: 'agent_click_to_call_support.error',
+        code: mapped.code,
+        smartfloMessage: mapped.smartfloMessage,
+      }));
+      throw new ApiError(mapped.status, mapped.code, mapped.message, 'phoneNumber');
     }
   }
 

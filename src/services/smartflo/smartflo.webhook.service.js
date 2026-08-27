@@ -57,7 +57,8 @@ export const parseWebhookEvent = (body = {}) => {
     src.notification_type,
   );
   const callId = firstString(src.call_id, src.callId, src.id);
-  const uuid = firstString(src.uuid, src.unique_id, src.uniqueId, src.ref_id, src.refId);
+  const refId = firstString(src.ref_id, src.refId, src.reference_id);
+  const uuid = firstString(src.uuid, src.unique_id, src.uniqueId, refId);
   const customerNumber = firstString(
     src.customer_number,
     src.destination,
@@ -73,13 +74,23 @@ export const parseWebhookEvent = (body = {}) => {
     src.disposition_name,
     src.dialer_disposition,
   );
-  const opportunityRef = firstString(src.field_5, src.lead_ref, src.crm_id, src.opportunity_id);
+  const custom = src.custom_identifier && typeof src.custom_identifier === 'object'
+    ? src.custom_identifier
+    : {};
+  const opportunityRef = firstString(
+    src.field_5,
+    src.lead_ref,
+    src.crm_id,
+    src.opportunity_id,
+    custom.opportunity_id,
+  );
   const smartfloLeadId = firstString(src.lead_id, src.smartflo_lead_id, src.broadcast_lead_id);
 
   return {
     eventType,
     callId,
     uuid,
+    refId,
     customerNumber,
     campaignId,
     disposition,
@@ -145,12 +156,24 @@ const matchOpportunity = async (parsed) => {
 };
 
 const upsertCall = async (parsed, opportunity) => {
-  const filter = parsed.callId
-    ? { smartflo_call_id: parsed.callId }
-    : parsed.uuid
-      ? { smartflo_uuid: parsed.uuid }
-      : null;
-  if (!filter) return null;
+  const orFilters = [];
+  if (parsed.callId) orFilters.push({ smartflo_call_id: parsed.callId });
+  if (parsed.uuid) {
+    orFilters.push({ smartflo_uuid: parsed.uuid });
+    orFilters.push({ smartflo_ref_id: parsed.uuid });
+  }
+  if (parsed.refId) {
+    orFilters.push({ smartflo_ref_id: parsed.refId });
+    orFilters.push({ smartflo_uuid: parsed.refId });
+  }
+  if (orFilters.length === 0) return null;
+
+  const existing = await DialerCall.findOne({ $or: orFilters });
+  const filter = existing
+    ? { _id: existing._id }
+    : (parsed.callId
+      ? { smartflo_call_id: parsed.callId }
+      : { smartflo_ref_id: parsed.refId || parsed.uuid });
 
   const eventStatus = mapCallEventType(parsed.eventType);
   const hangup = mapSmartfloStatus(parsed.hangupCause);
@@ -163,13 +186,14 @@ const upsertCall = async (parsed, opportunity) => {
     customer_id: opportunity?.customer_id || undefined,
     customer_number: parsed.customerNumber || undefined,
     smartflo_call_id: parsed.callId || undefined,
-    smartflo_uuid: parsed.uuid || undefined,
+    smartflo_uuid: parsed.uuid || parsed.refId || undefined,
+    smartflo_ref_id: parsed.refId || parsed.uuid || undefined,
     smartflo_lead_id: parsed.smartfloLeadId || opportunity?.smartflo_lead_id || undefined,
     campaign_id: parsed.campaignId || env.SMARTFLO_CAMPAIGN_ID || undefined,
     agent_id: parsed.agentId || undefined,
     agent_name: parsed.agentName || undefined,
     caller_id: parsed.callerId || undefined,
-    direction: parsed.direction || undefined,
+    direction: parsed.direction || 'outbound',
     status,
     disposition: disp.mapped || parsed.disposition || undefined,
     disposition_code: parsed.disposition || undefined,
@@ -180,7 +204,11 @@ const upsertCall = async (parsed, opportunity) => {
   };
   if (parsed.startTime) patch.start_time = new Date(parsed.startTime);
   if (parsed.endTime) patch.end_time = new Date(parsed.endTime);
-  if (eventStatus === 'IN_CALL' || /connected to agent/i.test(parsed.eventType || '')) {
+  if (
+    eventStatus === 'IN_CALL'
+    || eventStatus === 'CONTACTED'
+    || /connected|answered/i.test(parsed.eventType || '')
+  ) {
     patch.answered_at = parsed.startTime ? new Date(parsed.startTime) : new Date();
   }
 
