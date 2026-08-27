@@ -9,6 +9,8 @@ import {
   compareLocalAndRemoteLead,
   fetchLeadLists,
   fetchLeadsInList,
+  getDialerLeadSyncStats,
+  syncAllLeadsToSmartflo,
   syncOpportunityToSmartflo,
   syncPendingLeads,
   syncSelectedLeads,
@@ -71,8 +73,16 @@ export const syncDialerLead = asyncHandler(async (req, res) => {
   ok(res, await syncOpportunityToSmartflo(req.params.id));
 });
 
-export const syncPendingDialerLeads = asyncHandler(async (_req, res) => {
+export const syncPendingDialerLeads = asyncHandler(async (req, res) => {
+  if (req.body?.syncAll === true) {
+    ok(res, await syncAllLeadsToSmartflo(req.user?.email || req.user?.name || 'Admin'));
+    return;
+  }
   ok(res, await syncPendingLeads(200));
+});
+
+export const getDialerLeadSyncStatsHandler = asyncHandler(async (_req, res) => {
+  ok(res, await getDialerLeadSyncStats());
 });
 
 export const bulkSyncDialerLeads = asyncHandler(async (req, res) => {

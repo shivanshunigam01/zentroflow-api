@@ -27,6 +27,10 @@ export const campaignPatchValidator = [
   body('status').optional().isString(),
 ];
 
+export const syncLeadsBodyValidator = [
+  body('syncAll').optional().isBoolean().withMessage('syncAll must be a boolean'),
+];
+
 export const callsQueryValidator = [
   query('page').optional().isInt({ min: 1 }).toInt(),
   query('limit').optional().isInt({ min: 1, max: 200 }).toInt(),

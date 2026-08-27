@@ -7,6 +7,7 @@ import {
   dispositionValidator,
   callsQueryValidator,
   syncLeadIdValidator,
+  syncLeadsBodyValidator,
   testSyncValidator,
 } from '../validators/dialer.validator.js';
 import {
@@ -17,6 +18,7 @@ import {
   getDialerCall,
   getDialerCampaign,
   getDialerCampaignStatus,
+  getDialerLeadSyncStatsHandler,
   listDialerCallbacks,
   listDialerCalls,
   listDialerDispositions,
@@ -45,9 +47,10 @@ router.get('/lead-lists', requireAdmin, listDialerLeadLists);
 router.get('/lead-lists/:listId/leads', requireAdmin, listDialerRemoteLeads);
 
 router.get('/leads', listDialerLeads);
+router.get('/leads/sync/stats', requireAdmin, getDialerLeadSyncStatsHandler);
 router.post('/leads', requireAdmin, createDialerLead);
 router.post('/leads/bulk', requireAdmin, bulkSyncValidator, validate, bulkSyncDialerLeads);
-router.post('/leads/sync', requireAdmin, syncPendingDialerLeads);
+router.post('/leads/sync', requireAdmin, syncLeadsBodyValidator, validate, syncPendingDialerLeads);
 router.post('/leads/:id/sync', requireAdmin, syncLeadIdValidator, validate, syncDialerLead);
 
 router.get('/dispositions', listDialerDispositions);
