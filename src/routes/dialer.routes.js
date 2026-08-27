@@ -6,6 +6,7 @@ import {
   campaignPatchValidator,
   dispositionValidator,
   callsQueryValidator,
+  syncJobIdValidator,
   syncLeadIdValidator,
   syncLeadsBodyValidator,
   testSyncValidator,
@@ -18,7 +19,10 @@ import {
   getDialerCall,
   getDialerCampaign,
   getDialerCampaignStatus,
+  getDialerCurrentCall,
   getDialerLeadSyncStatsHandler,
+  getDialerStatisticsHandler,
+  getDialerSyncJob,
   listDialerCallbacks,
   listDialerCalls,
   listDialerDispositions,
@@ -27,6 +31,7 @@ import {
   listDialerRemoteLeads,
   logoutSession,
   patchDialerCampaign,
+  postCallDisposition,
   postDialerDisposition,
   sessionStatus,
   startSession,
@@ -43,6 +48,9 @@ router.get('/campaign', getDialerCampaign);
 router.get('/campaign/status', getDialerCampaignStatus);
 router.patch('/campaign', requireAdmin, campaignPatchValidator, validate, patchDialerCampaign);
 
+router.get('/statistics', getDialerStatisticsHandler);
+router.get('/current-call', getDialerCurrentCall);
+
 router.get('/lead-lists', requireAdmin, listDialerLeadLists);
 router.get('/lead-lists/:listId/leads', requireAdmin, listDialerRemoteLeads);
 
@@ -53,11 +61,14 @@ router.post('/leads/bulk', requireAdmin, bulkSyncValidator, validate, bulkSyncDi
 router.post('/leads/sync', requireAdmin, syncLeadsBodyValidator, validate, syncPendingDialerLeads);
 router.post('/leads/:id/sync', requireAdmin, syncLeadIdValidator, validate, syncDialerLead);
 
+router.get('/sync-jobs/:syncId', requireAdmin, syncJobIdValidator, validate, getDialerSyncJob);
+
 router.get('/dispositions', listDialerDispositions);
 router.post('/disposition', dispositionValidator, validate, postDialerDisposition);
 
 router.get('/calls', callsQueryValidator, validate, listDialerCalls);
 router.get('/calls/:id', getDialerCall);
+router.post('/calls/:id/disposition', dispositionValidator, validate, postCallDisposition);
 router.get('/callbacks', listDialerCallbacks);
 
 router.post('/session/start', startSession);

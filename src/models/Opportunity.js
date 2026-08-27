@@ -45,6 +45,10 @@ const opportunitySchema = new mongoose.Schema({
   callback_at: { type: Date, default: null },
   callback_note: { type: String, default: null },
   callback_agent_id: { type: String, default: null },
+  /** Agent dialer disposition form extras */
+  dialer_feedback: { type: String, default: null },
+  dialer_notes: { type: String, default: null },
+  dialer_priority: { type: String, enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT', null], default: null },
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
 
 opportunitySchema.pre('validate', function validateStage(next) {

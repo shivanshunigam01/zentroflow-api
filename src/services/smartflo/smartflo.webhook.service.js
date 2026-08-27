@@ -7,10 +7,44 @@ import Opportunity from '../../models/Opportunity.js';
 import DialerCall from '../../models/DialerCall.js';
 import LeadActivity from '../../models/LeadActivity.js';
 import SmartfloWebhookEvent from '../../models/SmartfloWebhookEvent.js';
+import { writeDialerAudit } from './smartflo.audit.service.js';
 import { firstString } from './smartflo.helpers.js';
 import { mapCallEventType, mapSmartfloStatus } from './smartflo.status.mapper.js';
 
 const pickPayload = (body = {}) => body.data && typeof body.data === 'object' ? { ...body, ...body.data } : body;
+
+/** Map Smartflo disposition / event → Opportunity dial fields (idempotent with event_key). */
+const applyOpportunityDialStatus = (opportunity, parsed) => {
+  const disp = mapSmartfloStatus(parsed.disposition);
+  const eventStatus = mapCallEventType(parsed.eventType);
+  opportunity.smartflo_last_call_id = parsed.callId || parsed.uuid || opportunity.smartflo_last_call_id;
+  opportunity.smartflo_last_call_at = new Date();
+
+  if (eventStatus === 'RINGING' || eventStatus === 'IN_CALL') {
+    opportunity.smartflo_dial_status = eventStatus;
+  }
+  if (eventStatus === 'DISPOSITION_PENDING' && !disp.mapped) {
+    opportunity.smartflo_dial_status = 'DISPOSITION_PENDING';
+  }
+
+  if (disp.mapped) {
+    opportunity.smartflo_disposition = disp.mapped;
+    opportunity.smartflo_dial_status = disp.mapped;
+    if (disp.mapped === 'CALLBACK') {
+      opportunity.callback_at = opportunity.callback_at || new Date();
+    }
+    if (disp.mapped === 'INTERESTED' || disp.mapped === 'CONVERTED') {
+      // Keep dial status as business outcome; CRM stage changes stay manual / other flows.
+    }
+  } else if (parsed.disposition) {
+    opportunity.smartflo_external_disposition = parsed.disposition;
+  }
+
+  if (parsed.subDisposition) opportunity.smartflo_sub_disposition = parsed.subDisposition;
+  if (parsed.smartfloLeadId && !opportunity.smartflo_lead_id) {
+    opportunity.smartflo_lead_id = parsed.smartfloLeadId;
+  }
+};
 
 export const parseWebhookEvent = (body = {}) => {
   const src = pickPayload(body);
@@ -170,24 +204,7 @@ export const processSmartfloWebhook = async (body) => {
   const call = await upsertCall(parsed, opportunity);
 
   if (opportunity) {
-    const disp = mapSmartfloStatus(parsed.disposition);
-    const eventStatus = mapCallEventType(parsed.eventType);
-    opportunity.smartflo_last_call_id = parsed.callId || parsed.uuid || opportunity.smartflo_last_call_id;
-    opportunity.smartflo_last_call_at = new Date();
-    if (eventStatus) opportunity.smartflo_dial_status = eventStatus;
-    if (disp.mapped) {
-      opportunity.smartflo_disposition = disp.mapped;
-      opportunity.smartflo_dial_status = disp.mapped;
-    } else if (parsed.disposition) {
-      opportunity.smartflo_external_disposition = parsed.disposition;
-    }
-    if (parsed.subDisposition) opportunity.smartflo_sub_disposition = parsed.subDisposition;
-    if (disp.mapped === 'CALLBACK') {
-      opportunity.callback_at = new Date();
-    }
-    if (parsed.smartfloLeadId && !opportunity.smartflo_lead_id) {
-      opportunity.smartflo_lead_id = parsed.smartfloLeadId;
-    }
+    applyOpportunityDialStatus(opportunity, parsed);
     await opportunity.save();
 
     if (!existing) {
@@ -232,6 +249,19 @@ export const processSmartfloWebhook = async (body) => {
     },
     { upsert: true, new: true },
   );
+
+  await writeDialerAudit({
+    actor: 'Smartflo',
+    action: existing ? 'webhook.duplicate' : 'webhook.processed',
+    entity: 'call',
+    entityId: parsed.callId || parsed.uuid || eventKey,
+    metadata: {
+      eventType: parsed.eventType || null,
+      disposition: parsed.disposition || null,
+      opportunityId: opportunity?.opportunity_id || null,
+      duplicate: Boolean(existing),
+    },
+  });
 
   console.log(JSON.stringify({
     service: 'smartflo',

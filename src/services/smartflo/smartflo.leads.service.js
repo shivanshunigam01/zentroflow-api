@@ -8,8 +8,9 @@ import SmartfloSyncLog from '../../models/SmartfloSyncLog.js';
 import { getSmartfloBatchStatus } from '../smartflo.service.js';
 import { smartfloGet, smartfloPost, smartfloPut } from './smartflo.client.js';
 import { asArray, firstString } from './smartflo.helpers.js';
+import { writeDialerAudit } from './smartflo.audit.service.js';
 
-const BATCH_SIZE = 500;
+const BATCH_SIZE = env.SMARTFLO_SYNC_BATCH_SIZE || 500;
 const BATCH_POLL_ATTEMPTS = 30;
 const BATCH_POLL_DELAY_MS = 2000;
 const SYNC_LOCK_MAX_AGE_MS = 2 * 60 * 60 * 1000;
@@ -300,10 +301,25 @@ export const syncAllLeadsToSmartflo = async (changedBy = 'System') => {
     created_by: changedBy,
   });
 
+  await writeDialerAudit({
+    actor: changedBy,
+    action: 'sync.started',
+    entity: 'sync',
+    entityId: syncId,
+    metadata: { syncType: 'dialer_all', eligible: stats.eligible, total: stats.total },
+  });
+
   const run = async () => {
     if (toUpload.length === 0) {
       log.status = 'completed';
       await log.save();
+      await writeDialerAudit({
+        actor: changedBy,
+        action: 'sync.completed',
+        entity: 'sync',
+        entityId: syncId,
+        metadata: { uploaded: 0, failed: 0, alreadySynced: stats.alreadySynced },
+      });
       return {
         success: true,
         syncId,
@@ -433,6 +449,19 @@ export const syncAllLeadsToSmartflo = async (changedBy = 'System') => {
     log.batch_results = batchResults;
     await log.save();
 
+    await writeDialerAudit({
+      actor: changedBy,
+      action: failed > 0 && uploaded === 0 ? 'sync.failed' : 'sync.completed',
+      entity: 'sync',
+      entityId: syncId,
+      metadata: {
+        uploaded,
+        failed,
+        alreadySynced: stats.alreadySynced,
+        status: log.status,
+      },
+    });
+
     console.log(JSON.stringify({
       service: 'smartflo',
       operation: 'syncAll',
@@ -541,13 +570,13 @@ export const syncOpportunityToSmartflo = async (opportunityId) => {
   }
 };
 
-export const syncPendingLeads = async (limit = 100) => {
+export const syncPendingLeads = async (limit = 100, changedBy = 'System') => {
   const pending = await Opportunity.find({
     $or: [
       { smartflo_sync_status: { $in: [null, 'PENDING', 'FAILED'] } },
       { smartflo_sync_status: { $exists: false } },
     ],
-  }).limit(Math.min(Number(limit) || 100, 500));
+  }).limit(Math.min(Number(limit) || 100, BATCH_SIZE));
 
   const results = [];
   for (const opp of pending) {
@@ -561,13 +590,66 @@ export const syncPendingLeads = async (limit = 100) => {
       });
     }
   }
+  await writeDialerAudit({
+    actor: changedBy,
+    action: 'sync.pending',
+    entity: 'sync',
+    entityId: null,
+    metadata: { total: pending.length },
+  });
   return { total: pending.length, results };
 };
 
-export const syncSelectedLeads = async (ids = []) => {
+export const syncFailedLeads = async (limit = 200, changedBy = 'System') => {
+  const failed = await Opportunity.find({ smartflo_sync_status: 'FAILED' })
+    .limit(Math.min(Number(limit) || 200, BATCH_SIZE));
+  const syncId = randomUUID();
+  const results = [];
+  for (const opp of failed) {
+    try {
+      results.push(await syncOpportunityToSmartflo(opp.opportunity_id));
+    } catch (err) {
+      results.push({
+        opportunity_id: opp.opportunity_id,
+        smartflo_sync_status: 'FAILED',
+        error: err.message,
+      });
+    }
+  }
+  const uploaded = results.filter((r) => r.smartflo_sync_status === 'SYNCED' || r.result === 'synced').length;
+  const failedCount = results.length - uploaded;
+  await SmartfloSyncLog.create({
+    sync_id: syncId,
+    sync_type: 'dialer_retry',
+    status: failedCount === 0 ? 'completed' : (uploaded > 0 ? 'partial' : 'partial'),
+    total_leads: failed.length,
+    eligible: failed.length,
+    uploaded,
+    failed: failedCount,
+    created_by: changedBy,
+  });
+  await writeDialerAudit({
+    actor: changedBy,
+    action: 'sync.retry_failed',
+    entity: 'sync',
+    entityId: syncId,
+    metadata: { total: failed.length, uploaded, failed: failedCount },
+  });
+  return {
+    syncId,
+    total: failed.length,
+    uploaded,
+    failed: failedCount,
+    results,
+    status: failedCount === 0 ? 'COMPLETED' : 'PARTIAL',
+  };
+};
+
+export const syncSelectedLeads = async (ids = [], changedBy = 'System') => {
   if (!Array.isArray(ids) || ids.length === 0) {
     throw new ApiError(400, 'VALIDATION_ERROR', 'leadIds is required');
   }
+  const syncId = randomUUID();
   const results = [];
   for (const id of ids) {
     try {
@@ -576,7 +658,59 @@ export const syncSelectedLeads = async (ids = []) => {
       results.push({ opportunity_id: id, smartflo_sync_status: 'FAILED', error: err.message });
     }
   }
-  return { total: ids.length, results };
+  const uploaded = results.filter((r) => r.smartflo_sync_status === 'SYNCED' || r.result === 'synced').length;
+  const failedCount = results.length - uploaded;
+  await SmartfloSyncLog.create({
+    sync_id: syncId,
+    sync_type: 'dialer_selected',
+    status: failedCount === 0 ? 'completed' : 'partial',
+    total_leads: ids.length,
+    eligible: ids.length,
+    uploaded,
+    failed: failedCount,
+    created_by: changedBy,
+  });
+  await writeDialerAudit({
+    actor: changedBy,
+    action: 'sync.selected',
+    entity: 'sync',
+    entityId: syncId,
+    metadata: { total: ids.length, uploaded, failed: failedCount },
+  });
+  return {
+    syncId,
+    total: ids.length,
+    uploaded,
+    failed: failedCount,
+    results,
+    status: failedCount === 0 ? 'COMPLETED' : 'PARTIAL',
+  };
+};
+
+/** GET /dialer/sync-jobs/:syncId — map wishlist jobId → SmartfloSyncLog.sync_id */
+export const getSyncJobById = async (syncId) => {
+  if (!syncId?.trim()) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'syncId is required');
+  }
+  const log = await SmartfloSyncLog.findOne({ sync_id: syncId.trim() }).lean();
+  if (!log) throw new ApiError(404, 'SYNC_JOB_NOT_FOUND', 'Sync job not found');
+  return {
+    syncId: log.sync_id,
+    jobId: log.sync_id,
+    syncType: log.sync_type,
+    status: String(log.status || '').toUpperCase(),
+    totalLeads: log.total_leads,
+    eligible: log.eligible,
+    uploaded: log.uploaded,
+    failed: log.failed,
+    skipped: log.skipped,
+    alreadySynced: log.already_synced,
+    invalid: log.invalid,
+    batchResults: log.batch_results || [],
+    createdBy: log.created_by,
+    createdAt: log.created_at,
+    updatedAt: log.updated_at,
+  };
 };
 
 export const compareLocalAndRemoteLead = async (opportunityId) => {

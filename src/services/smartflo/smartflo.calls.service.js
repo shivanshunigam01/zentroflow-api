@@ -1,6 +1,8 @@
 import DialerCall from '../../models/DialerCall.js';
 import Opportunity from '../../models/Opportunity.js';
+import { env } from '../../config/env.js';
 import { getPagination, paginationMeta } from '../../helpers/pagination.js';
+import { enrichLeadDto } from '../../helpers/leadDto.js';
 import { smartfloGet } from './smartflo.client.js';
 import { asArray, firstString } from './smartflo.helpers.js';
 import { mapSmartfloStatus } from './smartflo.status.mapper.js';
@@ -189,4 +191,130 @@ export const listCallbacks = async () => {
     ],
   }).select('opportunity_id lead_id customer_id smartflo_dial_status callback_at callback_note callback_agent_id smartflo_disposition').lean();
   return rows;
+};
+
+const OPEN_CALL_STATUSES = ['RINGING', 'IN_CALL', 'DISPOSITION_PENDING', 'CONNECTED'];
+
+/**
+ * Latest open dialer call for the agent UI, with enriched lead when matched.
+ * Empty → { call: null, lead: null, state: 'WAITING' }
+ */
+export const getCurrentCall = async (user = null) => {
+  const filter = {
+    status: { $in: OPEN_CALL_STATUSES },
+  };
+  if (env.SMARTFLO_CAMPAIGN_ID?.trim()) {
+    filter.$or = [
+      { campaign_id: env.SMARTFLO_CAMPAIGN_ID.trim() },
+      { campaign_id: null },
+      { campaign_id: { $exists: false } },
+    ];
+  }
+
+  const row = await DialerCall.findOne(filter).sort({ updated_at: -1, created_at: -1 }).lean();
+  if (!row) {
+    return { call: null, lead: null, campaignId: env.SMARTFLO_CAMPAIGN_ID || null, state: 'WAITING' };
+  }
+
+  const call = serializeCallRecord(row);
+  let lead = null;
+  if (row.opportunity_id || row.lead_id) {
+    const opp = await Opportunity.findOne({
+      $or: [
+        ...(row.opportunity_id ? [{ opportunity_id: row.opportunity_id }] : []),
+        ...(row.lead_id ? [{ lead_id: row.lead_id }, { opportunity_id: row.lead_id }] : []),
+      ],
+    });
+    if (opp) lead = await enrichLeadDto(opp);
+  }
+
+  const status = String(row.status || '').toUpperCase();
+  let state = 'WAITING';
+  if (status === 'RINGING') state = 'RINGING';
+  else if (status === 'IN_CALL' || status === 'CONNECTED') state = 'CONNECTED';
+  else if (status === 'DISPOSITION_PENDING') state = 'DISPOSITION_PENDING';
+  else if (['COMPLETED', 'FAILED', 'NO_ANSWER', 'BUSY', 'CALL_DROPPED'].includes(status)) state = 'ENDED';
+
+  return {
+    call,
+    lead,
+    campaignId: env.SMARTFLO_CAMPAIGN_ID || null,
+    agent: user ? { email: user.email || null, name: user.name || null } : null,
+    state,
+  };
+};
+
+/** Aggregate dialer stats from DialerCall + Opportunity sync fields. */
+export const getDialerStatistics = async () => {
+  const [
+    totalLeads,
+    synced,
+    pending,
+    failedSync,
+    callAgg,
+  ] = await Promise.all([
+    Opportunity.countDocuments({}),
+    Opportunity.countDocuments({ smartflo_sync_status: 'SYNCED' }),
+    Opportunity.countDocuments({
+      $or: [
+        { smartflo_sync_status: { $in: ['PENDING', null] } },
+        { smartflo_sync_status: { $exists: false } },
+      ],
+    }),
+    Opportunity.countDocuments({ smartflo_sync_status: 'FAILED' }),
+    DialerCall.aggregate([
+      {
+        $group: {
+          _id: null,
+          dialed: { $sum: 1 },
+          connected: {
+            $sum: {
+              $cond: [{ $in: ['$status', ['IN_CALL', 'CONNECTED', 'COMPLETED', 'INTERESTED', 'CONVERTED', 'CONTACTED', 'DISPOSITION_PENDING']] }, 1, 0],
+            },
+          },
+          completed: {
+            $sum: { $cond: [{ $in: ['$status', ['COMPLETED', 'INTERESTED', 'CONVERTED', 'CONTACTED', 'NOT_INTERESTED', 'CALLBACK']] }, 1, 0] },
+          },
+          interested: { $sum: { $cond: [{ $eq: ['$disposition', 'INTERESTED'] }, 1, 0] } },
+          notInterested: { $sum: { $cond: [{ $eq: ['$disposition', 'NOT_INTERESTED'] }, 1, 0] } },
+          callbacks: { $sum: { $cond: [{ $eq: ['$disposition', 'CALLBACK'] }, 1, 0] } },
+          converted: { $sum: { $cond: [{ $eq: ['$disposition', 'CONVERTED'] }, 1, 0] } },
+          noAnswer: { $sum: { $cond: [{ $in: ['$status', ['NO_ANSWER']] }, 1, 0] } },
+          busy: { $sum: { $cond: [{ $eq: ['$status', 'BUSY'] }, 1, 0] } },
+          failed: { $sum: { $cond: [{ $in: ['$status', ['FAILED', 'CALL_DROPPED']] }, 1, 0] } },
+          totalDuration: { $sum: { $ifNull: ['$duration', 0] } },
+        },
+      },
+    ]),
+  ]);
+
+  const c = callAgg[0] || {};
+  const dialed = c.dialed || 0;
+  const connected = c.connected || 0;
+  const completed = c.completed || 0;
+  const interested = c.interested || 0;
+  const converted = c.converted || 0;
+  const avgDuration = dialed > 0 ? Math.round((c.totalDuration || 0) / dialed) : 0;
+
+  return {
+    totalLeads,
+    synced,
+    pending,
+    failedSync,
+    dialed,
+    connected,
+    completed,
+    interested,
+    notInterested: c.notInterested || 0,
+    callbacks: c.callbacks || 0,
+    converted,
+    noAnswer: c.noAnswer || 0,
+    busy: c.busy || 0,
+    failed: c.failed || 0,
+    connectionRate: dialed > 0 ? Number(((connected / dialed) * 100).toFixed(1)) : 0,
+    answerRate: dialed > 0 ? Number(((connected / dialed) * 100).toFixed(1)) : 0,
+    conversionRate: connected > 0 ? Number(((converted / connected) * 100).toFixed(1)) : 0,
+    interestRate: connected > 0 ? Number(((interested / connected) * 100).toFixed(1)) : 0,
+    averageCallDuration: avgDuration,
+  };
 };

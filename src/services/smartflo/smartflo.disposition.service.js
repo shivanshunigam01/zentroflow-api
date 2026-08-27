@@ -7,8 +7,16 @@ import { smartfloGet, smartfloPost } from './smartflo.client.js';
 import { asArray, firstString } from './smartflo.helpers.js';
 import { mapSmartfloStatus } from './smartflo.status.mapper.js';
 import { findOpportunityByDialerId } from './smartflo.leads.service.js';
+import { writeDialerAudit } from './smartflo.audit.service.js';
 
 const listId = () => env.SMARTFLO_DISPOSITION_LIST_ID?.trim() || null;
+
+const PRIORITY_MAP = {
+  LOW: 'P5',
+  MEDIUM: 'P3',
+  HIGH: 'P2',
+  URGENT: 'P1',
+};
 
 const normalizeDisposition = (row) => ({
   id: String(firstString(row.id, row.disposition_id, row.status_id, row.value) || ''),
@@ -38,11 +46,17 @@ export const storeDisposition = async ({
   dispositionStatus,
   subDispositionStatus,
   note,
+  notes,
+  priority,
+  feedback,
+  callbackAt,
   changedBy = 'Agent',
 }) => {
   if (!dispositionStatus) {
     throw new ApiError(400, 'VALIDATION_ERROR', 'dispositionStatus is required');
   }
+
+  const dispositionNote = notes || note || undefined;
 
   const call = callId
     ? await DialerCall.findOne({
@@ -68,7 +82,7 @@ export const storeDisposition = async ({
     unique_id: uniqueId,
   };
   if (subDispositionStatus) payload.sub_disposition_status = subDispositionStatus;
-  if (note) payload.disposition_note = note;
+  if (dispositionNote) payload.disposition_note = dispositionNote;
 
   await smartfloPost('/dialer/store-disposition', payload, 'storeDisposition');
 
@@ -79,8 +93,8 @@ export const storeDisposition = async ({
     call.disposition = mapped.mapped || dispositionStatus;
     call.disposition_code = dispositionStatus;
     call.sub_disposition = subDispositionStatus || call.sub_disposition;
-    call.disposition_note = note || call.disposition_note;
-    call.status = dialStatus;
+    call.disposition_note = dispositionNote || call.disposition_note;
+    call.status = dialStatus === 'CALLBACK' ? 'CALLBACK' : (dialStatus || 'COMPLETED');
     await call.save();
   }
 
@@ -95,10 +109,21 @@ export const storeDisposition = async ({
     opportunity.smartflo_sub_disposition = subDispositionStatus || opportunity.smartflo_sub_disposition;
     opportunity.smartflo_external_disposition = mapped.external;
     opportunity.smartflo_dial_status = dialStatus;
-    if (dialStatus === 'CALLBACK') {
-      opportunity.callback_note = note || opportunity.callback_note;
+
+    if (feedback) opportunity.dialer_feedback = String(feedback).slice(0, 500);
+    if (dispositionNote) opportunity.dialer_notes = String(dispositionNote).slice(0, 2000);
+    if (priority) {
+      const key = String(priority).toUpperCase();
+      opportunity.dialer_priority = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'].includes(key) ? key : opportunity.dialer_priority;
+      if (PRIORITY_MAP[key]) opportunity.priority = PRIORITY_MAP[key];
+    }
+
+    if (dialStatus === 'CALLBACK' || callbackAt) {
+      opportunity.callback_at = callbackAt ? new Date(callbackAt) : (opportunity.callback_at || new Date());
+      opportunity.callback_note = dispositionNote || opportunity.callback_note;
       opportunity.callback_agent_id = changedBy;
     }
+
     await opportunity.save();
     await LeadActivity.create({
       opportunity_id: opportunity.opportunity_id,
@@ -107,9 +132,26 @@ export const storeDisposition = async ({
       title: 'Dialer disposition',
       description: mapped.mapped || dispositionStatus,
       changed_by: changedBy,
-      payload: { dispositionStatus, uniqueId },
+      payload: {
+        dispositionStatus,
+        uniqueId,
+        priority: priority || null,
+        feedback: feedback || null,
+        callbackAt: callbackAt || null,
+      },
     });
   }
+
+  await writeDialerAudit({
+    actor: changedBy,
+    action: 'disposition.saved',
+    entity: 'call',
+    entityId: uniqueId,
+    metadata: {
+      disposition: mapped.mapped || dispositionStatus,
+      opportunityId: opportunity?.opportunity_id || null,
+    },
+  });
 
   console.log(JSON.stringify({
     service: 'smartflo',
@@ -122,5 +164,7 @@ export const storeDisposition = async ({
     uniqueId,
     disposition: mapped.mapped || dispositionStatus,
     known: mapped.known,
+    callId: call?._id?.toString?.() || callId || null,
+    opportunityId: opportunity?.opportunity_id || null,
   };
 };

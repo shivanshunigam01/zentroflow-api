@@ -77,6 +77,8 @@ export const env = {
   /** dial_out_each_call (default) | session */
   SMARTFLO_DIALER_MODE: (process.env.SMARTFLO_DIALER_MODE || 'dial_out_each_call').trim().toLowerCase(),
   SMARTFLO_WEBHOOK_SECRET: process.env.SMARTFLO_WEBHOOK_SECRET,
+  /** Bulk lead upload batch size (Smartflo broadcast leads API) */
+  SMARTFLO_SYNC_BATCH_SIZE: Math.min(Math.max(Number(process.env.SMARTFLO_SYNC_BATCH_SIZE || 500), 1), 500),
 
   /** Click-to-Call Support API — API Connect → Click to Call Support API */
   SMARTFLO_CLICK_TO_CALL_API_KEY: process.env.SMARTFLO_CLICK_TO_CALL_API_KEY,

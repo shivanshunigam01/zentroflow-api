@@ -4,6 +4,10 @@ export const syncLeadIdValidator = [
   param('id').trim().notEmpty().withMessage('lead id is required'),
 ];
 
+export const syncJobIdValidator = [
+  param('syncId').trim().notEmpty().withMessage('syncId is required'),
+];
+
 export const bulkSyncValidator = [
   body('leadIds').isArray({ min: 1 }).withMessage('leadIds must be a non-empty array'),
   body('leadIds.*').isString().notEmpty(),
@@ -19,6 +23,10 @@ export const dispositionValidator = [
   body('callId').optional().isString(),
   body('subDispositionStatus').optional().isString(),
   body('note').optional().isString(),
+  body('notes').optional().isString(),
+  body('priority').optional().isIn(['LOW', 'MEDIUM', 'HIGH', 'URGENT', 'low', 'medium', 'high', 'urgent']),
+  body('feedback').optional().isString().isLength({ max: 500 }),
+  body('callbackAt').optional().isISO8601(),
 ];
 
 export const campaignPatchValidator = [
@@ -29,6 +37,9 @@ export const campaignPatchValidator = [
 
 export const syncLeadsBodyValidator = [
   body('syncAll').optional().isBoolean().withMessage('syncAll must be a boolean'),
+  body('retryFailed').optional().isBoolean().withMessage('retryFailed must be a boolean'),
+  body('leadIds').optional().isArray().withMessage('leadIds must be an array'),
+  body('leadIds.*').optional().isString().notEmpty(),
 ];
 
 export const callsQueryValidator = [

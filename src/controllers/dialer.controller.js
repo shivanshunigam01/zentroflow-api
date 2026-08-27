@@ -10,7 +10,9 @@ import {
   fetchLeadLists,
   fetchLeadsInList,
   getDialerLeadSyncStats,
+  getSyncJobById,
   syncAllLeadsToSmartflo,
+  syncFailedLeads,
   syncOpportunityToSmartflo,
   syncPendingLeads,
   syncSelectedLeads,
@@ -22,7 +24,13 @@ import {
   logoutDialerSession,
   startDialerSession,
 } from '../services/smartflo/smartflo.session.service.js';
-import { getLocalCall, listCallbacks, listLocalCalls } from '../services/smartflo/smartflo.calls.service.js';
+import {
+  getCurrentCall,
+  getDialerStatistics,
+  getLocalCall,
+  listCallbacks,
+  listLocalCalls,
+} from '../services/smartflo/smartflo.calls.service.js';
 import { enrichLeadDto } from '../helpers/leadDto.js';
 
 export const dialerHealth = asyncHandler(async (_req, res) => {
@@ -74,19 +82,40 @@ export const syncDialerLead = asyncHandler(async (req, res) => {
 });
 
 export const syncPendingDialerLeads = asyncHandler(async (req, res) => {
+  const actor = req.user?.email || req.user?.name || 'Admin';
   if (req.body?.syncAll === true) {
-    ok(res, await syncAllLeadsToSmartflo(req.user?.email || req.user?.name || 'Admin'));
+    ok(res, await syncAllLeadsToSmartflo(actor));
     return;
   }
-  ok(res, await syncPendingLeads(200));
+  if (req.body?.retryFailed === true) {
+    ok(res, await syncFailedLeads(200, actor));
+    return;
+  }
+  if (Array.isArray(req.body?.leadIds) && req.body.leadIds.length > 0) {
+    ok(res, await syncSelectedLeads(req.body.leadIds, actor));
+    return;
+  }
+  ok(res, await syncPendingLeads(200, actor));
 });
 
 export const getDialerLeadSyncStatsHandler = asyncHandler(async (_req, res) => {
   ok(res, await getDialerLeadSyncStats());
 });
 
+export const getDialerSyncJob = asyncHandler(async (req, res) => {
+  ok(res, await getSyncJobById(req.params.syncId));
+});
+
+export const getDialerStatisticsHandler = asyncHandler(async (_req, res) => {
+  ok(res, await getDialerStatistics());
+});
+
+export const getDialerCurrentCall = asyncHandler(async (req, res) => {
+  ok(res, await getCurrentCall(req.user));
+});
+
 export const bulkSyncDialerLeads = asyncHandler(async (req, res) => {
-  ok(res, await syncSelectedLeads(req.body.leadIds));
+  ok(res, await syncSelectedLeads(req.body.leadIds, req.user?.email || req.user?.name || 'Admin'));
 });
 
 export const testSyncLead = asyncHandler(async (req, res) => {
@@ -101,15 +130,25 @@ export const listDialerDispositions = asyncHandler(async (_req, res) => {
   ok(res, await fetchDispositions());
 });
 
+const dispositionPayload = (req) => ({
+  leadId: req.body.leadId,
+  callId: req.body.callId || req.params.id,
+  dispositionStatus: req.body.dispositionStatus,
+  subDispositionStatus: req.body.subDispositionStatus,
+  note: req.body.note,
+  notes: req.body.notes,
+  priority: req.body.priority,
+  feedback: req.body.feedback,
+  callbackAt: req.body.callbackAt,
+  changedBy: req.user?.name || req.user?.email || 'Agent',
+});
+
 export const postDialerDisposition = asyncHandler(async (req, res) => {
-  ok(res, await storeDisposition({
-    leadId: req.body.leadId,
-    callId: req.body.callId,
-    dispositionStatus: req.body.dispositionStatus,
-    subDispositionStatus: req.body.subDispositionStatus,
-    note: req.body.note,
-    changedBy: req.user?.name || req.user?.email || 'Agent',
-  }));
+  ok(res, await storeDisposition(dispositionPayload(req)));
+});
+
+export const postCallDisposition = asyncHandler(async (req, res) => {
+  ok(res, await storeDisposition(dispositionPayload(req)));
 });
 
 export const listDialerCalls = asyncHandler(async (req, res) => {

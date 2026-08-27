@@ -15,7 +15,11 @@ const batchResultSchema = new mongoose.Schema({
 
 const smartfloSyncLogSchema = new mongoose.Schema({
   sync_id: { type: String, required: true, unique: true, index: true },
-  sync_type: { type: String, enum: ['legacy', 'dialer_all'], default: 'dialer_all' },
+  sync_type: {
+    type: String,
+    enum: ['legacy', 'dialer_all', 'dialer_selected', 'dialer_retry'],
+    default: 'dialer_all',
+  },
   status: { type: String, enum: ['running', 'completed', 'partial', 'processing'], default: 'running' },
   total_leads: { type: Number, default: 0 },
   eligible: { type: Number, default: 0 },

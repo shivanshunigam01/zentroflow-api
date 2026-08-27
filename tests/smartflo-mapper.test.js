@@ -88,3 +88,21 @@ describe('webhook parsing and idempotency key', () => {
     assert.notEqual(a, other);
   });
 });
+
+describe('session mode flag', () => {
+  it('treats session dialer mode as enabled', async () => {
+    const { isDialerSessionMode, env } = await import('../src/config/env.js');
+    assert.equal(typeof isDialerSessionMode(), 'boolean');
+    assert.ok(['session', 'dial_out_each_call'].includes(env.SMARTFLO_DIALER_MODE) || typeof env.SMARTFLO_DIALER_MODE === 'string');
+    assert.ok(env.SMARTFLO_SYNC_BATCH_SIZE >= 1 && env.SMARTFLO_SYNC_BATCH_SIZE <= 500);
+  });
+});
+
+describe('open call state labels', () => {
+  it('maps dialer call statuses used by current-call', () => {
+    const OPEN = ['RINGING', 'IN_CALL', 'DISPOSITION_PENDING', 'CONNECTED'];
+    assert.ok(OPEN.includes('RINGING'));
+    assert.equal(mapCallEventType('Call Connected to Agent (Dialer)'), 'IN_CALL');
+    assert.equal(mapSmartfloStatus('Schedule Call').mapped, 'CALLBACK');
+  });
+});

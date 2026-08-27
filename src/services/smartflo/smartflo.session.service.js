@@ -2,6 +2,7 @@ import { env, isDialerSessionMode } from '../../config/env.js';
 import { ApiError } from '../../middleware/errorHandler.middleware.js';
 import DialerAgentSession from '../../models/DialerAgentSession.js';
 import { smartfloPost } from './smartflo.client.js';
+import { writeDialerAudit } from './smartflo.audit.service.js';
 
 const sessionDisabled = () => new ApiError(
   409,
@@ -15,14 +16,19 @@ export const getSessionStatus = async (user) => {
   const mode = env.SMARTFLO_DIALER_MODE;
   const sessionEnabled = isDialerSessionMode();
   const doc = await DialerAgentSession.findOne({ user_id: userKey(user) }).lean();
+  const status = doc?.status || 'OFFLINE';
+  const active = sessionEnabled && ['IN_SESSION', 'IN_CALL', 'WRAP_UP', 'READY', 'PAUSED'].includes(status);
   return {
     dialerMode: mode,
     sessionEnabled,
-    status: doc?.status || 'OFFLINE',
+    active,
+    status,
     campaignId: env.SMARTFLO_CAMPAIGN_ID || null,
     startedAt: doc?.started_at || null,
+    endedAt: doc?.ended_at || null,
+    agentId: userKey(user),
     message: sessionEnabled
-      ? 'Session APIs are enabled for this campaign.'
+      ? (active ? 'Session is active.' : 'Session APIs are enabled. Start a session to begin auto-dialing.')
       : 'Calling is handled by the Smartflo Dialer Panel.',
   };
 };
@@ -49,8 +55,14 @@ export const startDialerSession = async (user) => {
     'sessionStart',
   );
   await persist(user, { status: 'IN_SESSION', started_at: new Date(), ended_at: null });
+  await writeDialerAudit({
+    actor: user?.email || user?.name || 'Agent',
+    action: 'session.started',
+    entity: 'campaign',
+    entityId: campaignId,
+  });
   console.log(JSON.stringify({ service: 'smartflo', operation: 'dialer.session.start', status: 'success' }));
-  return { status: 'IN_SESSION', smartflo: data };
+  return { status: 'IN_SESSION', active: true, smartflo: data };
 };
 
 export const endDialerSession = async (user) => {
@@ -62,8 +74,14 @@ export const endDialerSession = async (user) => {
     'sessionEnd',
   );
   await persist(user, { status: 'OFFLINE', ended_at: new Date() });
+  await writeDialerAudit({
+    actor: user?.email || user?.name || 'Agent',
+    action: 'session.ended',
+    entity: 'campaign',
+    entityId: campaignId,
+  });
   console.log(JSON.stringify({ service: 'smartflo', operation: 'dialer.session.end', status: 'success' }));
-  return { status: 'OFFLINE', smartflo: data };
+  return { status: 'OFFLINE', active: false, smartflo: data };
 };
 
 export const logoutDialerSession = async (user) => {
@@ -75,5 +93,11 @@ export const logoutDialerSession = async (user) => {
     'sessionLogout',
   );
   await persist(user, { status: 'OFFLINE', ended_at: new Date() });
-  return { status: 'OFFLINE', smartflo: data };
+  await writeDialerAudit({
+    actor: user?.email || user?.name || 'Agent',
+    action: 'session.logout',
+    entity: 'campaign',
+    entityId: campaignId,
+  });
+  return { status: 'OFFLINE', active: false, smartflo: data };
 };

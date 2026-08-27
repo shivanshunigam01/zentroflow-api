@@ -1,6 +1,6 @@
 # Smartflo Auto Dialer setup
 
-ZentroFLOW does **not** originate Autodialer customer calls. Smartflo Dial Out (Each Call) remains the dialer engine. ZentroFLOW syncs leads, stores call/disposition state, and shows campaign status.
+ZentroFLOW syncs leads into a pre-existing Smartflo campaign/list, receives call webhooks, and lets agents start a **session** so Smartflo auto-dials. ZentroFLOW never dials customer numbers from the browser.
 
 ## 1. Generate a Smartflo API token
 
@@ -17,71 +17,106 @@ SMARTFLO_CAMPAIGN_ID=
 SMARTFLO_LEAD_LIST_ID=
 SMARTFLO_DISPOSITION_LIST_ID=
 SMARTFLO_CALLER_ID=
-SMARTFLO_DIALER_MODE=dial_out_each_call
+SMARTFLO_DIALER_MODE=session
 SMARTFLO_WEBHOOK_SECRET=
+SMARTFLO_SYNC_BATCH_SIZE=500
 ```
 
-`SMARTFLO_DIALER_MODE=dial_out_each_call` is required for the production campaign. Session start/end APIs return `409 SMARTFLO_SESSION_DISABLED` until you switch to `session`.
+| Mode | Behaviour |
+|------|-----------|
+| `session` (recommended) | Autodialer **Agent** tab Start/End Session calls Smartflo `/dialer/session_call`. Smartflo sequences synced leads. |
+| `dial_out_each_call` | Session buttons stay disabled; agents use the Smartflo Dialer Panel. |
 
-## 3. Find Campaign ID
+Do **not** create campaigns, lead lists, or disposition lists from ZentroFLOW APIs — use the env IDs above.
 
-Smartflo campaign settings → campaign used by ZentroFLOW Auto Dialer → numeric campaign id → `SMARTFLO_CAMPAIGN_ID`.
+## 3. Find Campaign / Lead List / Disposition IDs
 
-Do **not** create a second campaign from ZentroFLOW.
+- Campaign settings → numeric id → `SMARTFLO_CAMPAIGN_ID`
+- Broadcast list attached to that campaign → `SMARTFLO_LEAD_LIST_ID`
+- Dialer disposition list on the campaign → `SMARTFLO_DISPOSITION_LIST_ID`
 
-## 4. Find Lead List ID
+ZentroFLOW loads disposition **IDs** from Smartflo; never hardcode names as IDs in the UI.
 
-Broadcast / lead list attached to that campaign → `SMARTFLO_LEAD_LIST_ID`.
+## 4. Lead field mapping (do not remap)
 
-## 5. Find Disposition List ID
+| Smartflo field | ZentroFLOW |
+|----------------|------------|
+| `field_0` | Customer phone |
+| `field_1` | Customer name |
+| `field_2` | Email |
+| `field_3` | Address |
+| `field_4` | Branch |
+| `field_5` | `opportunity_id` (webhook match key) |
 
-Dialer disposition list configured on the campaign → `SMARTFLO_DISPOSITION_LIST_ID`. ZentroFLOW loads status **IDs** from Smartflo; do not hardcode them in the UI.
-
-## 6. Configure the webhook
-
-In Smartflo webhook settings, point to your public API:
+## 5. Configure the webhook
 
 ```
 https://YOUR_PRODUCTION_DOMAIN/api/v1/webhooks/smartflo/dialer
 ```
 
-Alias (same handler):
+Alias:
 
 ```
 https://YOUR_PRODUCTION_DOMAIN/api/v1/integrations/smartflo/webhook
 ```
 
-If you set `SMARTFLO_WEBHOOK_SECRET`, send it as header `x-smartflo-secret` or `Authorization: Bearer <secret>`.
+If `SMARTFLO_WEBHOOK_SECRET` is set, send `x-smartflo-secret` or `Authorization: Bearer <secret>`.
 
-## 7. Enable these Smartflo events
+Enable events: Call Connected to Agent (Dialer), Disposition Status Updated (Dialer), Call hangup (Missed or Answered).
 
-- Call Connected to Agent (Dialer)
-- Disposition Status Updated (Dialer)
-- Call hangup (Missed or Answered)
+## 6. Key API endpoints
 
-## 8. One-lead live test
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/v1/dialer/current-call` | Latest open call + lead for Agent UI |
+| GET | `/api/v1/dialer/session/status` | `active`, `startedAt`, mode |
+| POST | `/api/v1/dialer/session/start\|end` | Smartflo session (mode=`session`) |
+| POST | `/api/v1/dialer/disposition` | Save disposition + CRM fields |
+| POST | `/api/v1/dialer/calls/:id/disposition` | Same as above (alias) |
+| POST | `/api/v1/dialer/leads/sync` | `{ syncAll }`, `{ leadIds }`, or `{ retryFailed }` |
+| GET | `/api/v1/dialer/sync-jobs/:syncId` | Bulk sync job progress |
+| GET | `/api/v1/dialer/statistics` | Connection / interest rates |
 
-1. Sign in to ZentroFLOW as admin.
-2. Open **Autodialer → Test**.
-3. Select one opportunity.
-4. **Sync to Smartflo** (`POST /api/v1/dialer/test/sync-lead`).
-5. **Check Smartflo status** — local + remote should match, remote status **New**.
-6. Agent logs into the **Smartflo Dialer Panel** (not the ZentroFLOW session buttons, unless mode is `session`).
-7. Complete one test call and set a disposition in Smartflo.
-8. Confirm webhook `POST` hits `/api/v1/webhooks/smartflo/dialer`.
-9. Confirm Mongo `dialercalls` has one row and the opportunity `smartflo_disposition` updated.
-10. Autodialer **Calls** tab shows the call.
+Smartflo upstream used: `/dialer/session_call`, `/broadcast/leads/{id}`, `/broadcast/batch_status/{id}`, `/dialer/store-disposition`, `/dialer/disposition_list`, campaign GET.
 
-Replay the same webhook — still **one** call row.
+## 7. Agent workflow (session mode)
 
-## 9. Verify webhook delivery
+1. Admin: Autodialer → **Campaign** → Sync All / Sync pending (or Leads → Sync selected).
+2. Agent: Autodialer → **Agent** → **Start Session**.
+3. Poll current-call: Waiting → Ringing → Connected → Disposition pending.
+4. Save disposition (Smartflo ID + priority / feedback / notes / callback).
+5. Smartflo advances to the next lead; **End Session** when done.
 
-- API logs: `{ "service": "smartflo", "operation": "smartflo.webhook", ... }` (no token).
-- Autodialer → Campaign → Last webhook.
-- Collection `smartflowebhookevents` (`event_key` unique).
+Admin tabs: Campaign, Leads, Test. Agent focus: Agent + Calls.
+
+## 8. Three-lead manual test
+
+1. Create/import **3** opportunities with valid Indian mobiles.
+2. Autodialer → Leads → select all three → **Sync selected** (or Sync All).
+3. Confirm `smartflo_sync_status=SYNCED` and remote list shows three rows (`field_5` = opportunity id).
+4. Set `SMARTFLO_DIALER_MODE=session`, restart API (`pm2 restart zentroflow-api --update-env`).
+5. Agent: Start Session; confirm Smartflo dials (or panel shows session active).
+6. Complete one call; webhook creates `DialerCall`; opportunity dial status updates.
+7. Agent saves disposition with notes + callback; verify Opportunity `dialer_notes` / `callback_at`.
+8. Replay the same webhook payload — still one call row (`event_key` idempotent).
+
+## 9. Production deploy checklist
+
+```bash
+# API
+git pull
+# ensure SMARTFLO_DIALER_MODE=session in .env
+pm2 restart zentroflow-api --update-env
+
+# Frontend
+# redeploy zentroverse-buddy (Vercel or your host)
+```
 
 ## 10. Known limits
 
-- Dial Out (Each Call): agents use the Smartflo panel.
-- No in-app WebSocket; Calls tab polls every 10s.
-- Click-to-call IVR/agent endpoints are unchanged and separate from Autodialer.
+- No Smartflo `createCampaign` / `createLeadList` / `createDispositionList` from ZentroFLOW.
+- No separate `/admin/dialer` or `/agent/dialer` URL trees (dashboard Autodialer module only).
+- No custom “Call Next Lead” engine — Smartflo sequences in session mode.
+- `field_5` must remain `opportunity_id`.
+- Progressive dial method only if present on the remote campaign payload.
+- Never log or expose `SMARTFLO_API_TOKEN`.
