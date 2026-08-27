@@ -10,6 +10,7 @@ import {
   buildLeadTemplateWorkbook,
   filterLeadRows,
 } from '../services/excelImport.service.js';
+import { createManualLead } from '../services/manualLeadCreate.service.js';
 import Customer from '../models/Customer.js';
 import { ApiError } from '../middleware/errorHandler.middleware.js';
 import {
@@ -107,6 +108,11 @@ const getRows = (req) => {
   if (req.file) return rowsFromWorkbookBuffer(req.file.buffer);
   return filterLeadRows(req.body.rows || []);
 };
+
+export const createLead = asyncHandler(async (req, res) => {
+  const dto = await createManualLead(req.body, req.user?.name || req.user?.email || 'System');
+  ok(res, dto, { status: 201 });
+});
 
 export const validateImport = asyncHandler(async (req, res) => {
   ok(res, await validateRows(getRows(req), { summaryOnly: true }));
