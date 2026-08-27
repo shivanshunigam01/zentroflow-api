@@ -82,7 +82,7 @@ export const env = {
 
   /** Click-to-Call Support API — API Connect → Click to Call Support API */
   SMARTFLO_CLICK_TO_CALL_API_KEY: process.env.SMARTFLO_CLICK_TO_CALL_API_KEY,
-  SMARTFLO_IVR_ID: process.env.SMARTFLO_IVR_ID || '83389',
+  SMARTFLO_IVR_ID: process.env.SMARTFLO_IVR_ID || '86970',
   SMARTFLO_CLICK_TO_CALL_ENDPOINT: process.env.SMARTFLO_CLICK_TO_CALL_ENDPOINT || '/v1/click_to_call_support',
   /** Optional DID — format 9180694XXXXX */
   SMARTFLO_CALLER_ID: process.env.SMARTFLO_CALLER_ID,
