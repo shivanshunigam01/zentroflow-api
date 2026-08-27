@@ -35,6 +35,14 @@ describe('click-to-call support payload', () => {
 });
 
 describe('click-to-call error mapping', () => {
+  it('maps caller id field errors including Smartflo typo vaild', () => {
+    const mapped = mapClickToCallError({
+      response: { status: 422, data: { caller_id: 'Provide a vaild caller_id.' } },
+    });
+    assert.equal(mapped.code, 'SMARTFLO_INVALID_CALLER_ID');
+    assert.equal(mapped.status, 400);
+  });
+
   it('maps caller id errors', () => {
     const mapped = mapClickToCallError({
       response: { status: 400, data: { success: false, message: 'Provide a valid caller_id.' } },

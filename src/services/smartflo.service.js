@@ -274,6 +274,8 @@ export const validateClickToCallPhone = (phoneNumber) => {
 /**
  * Documented Click-to-Call Support body.
  * Do not send ivrId — destination is configured on the Support API key in Smartflo.
+ * Do not send caller_id here — DID is also bound to the Support API key; an invalid
+ * SMARTFLO_CALLER_ID (used by agent /v1/click_to_call) causes Smartflo 422 and ZentroFLOW 502.
  */
 export function buildClickToCallPayload(customerNumber, meta = {}) {
   const payload = {
@@ -282,8 +284,10 @@ export function buildClickToCallPayload(customerNumber, meta = {}) {
     async: 1,
   };
 
-  if (env.SMARTFLO_CALLER_ID?.trim()) {
-    payload.caller_id = env.SMARTFLO_CALLER_ID.trim();
+  // Optional override only — must be a DID assigned to the account
+  const ctcCallerId = (env.SMARTFLO_CTC_CALLER_ID || '').trim();
+  if (ctcCallerId) {
+    payload.caller_id = ctcCallerId;
   }
 
   const custom = {};
@@ -316,9 +320,11 @@ export const getClickToCallUrl = () => {
 export const mapClickToCallError = (err) => {
   const status = err.response?.status;
   const data = err.response?.data;
+  const fieldCaller = typeof data?.caller_id === 'string' ? data.caller_id : null;
   const fieldMsg = Array.isArray(data?.customer_number) ? data.customer_number[0] : null;
   const rawMessage = String(
-    fieldMsg
+    fieldCaller
+    || fieldMsg
     || data?.message
     || data?.error
     || (typeof data === 'string' ? data : '')
@@ -330,7 +336,8 @@ export const mapClickToCallError = (err) => {
   if (err.code === 'ECONNABORTED' || /timeout/i.test(err.message || '')) {
     return { code: 'SMARTFLO_TIMEOUT', status: 504, message: 'Smartflo request timed out', smartfloMessage: rawMessage };
   }
-  if (/caller[_\s-]?id|provide a valid caller/i.test(lower)) {
+  // Smartflo sometimes misspells "valid" as "vaild"
+  if (fieldCaller || /caller[_\s-]?id|provide a va[li]{1,2}d caller/i.test(lower)) {
     return { code: 'SMARTFLO_INVALID_CALLER_ID', status: 400, message: 'Invalid or unconfigured Smartflo caller ID (DID)', smartfloMessage: rawMessage };
   }
   if (/customer number|between 10 and 12|invalid number|destination number/i.test(lower)) {
@@ -450,7 +457,7 @@ export const initiateClickToCall = async (phoneNumber, meta = {}) => {
       customer_number: normalized,
       smartflo_ref_id: refId,
       smartflo_uuid: refId,
-      caller_id: payload.caller_id || env.SMARTFLO_CALLER_ID || null,
+      caller_id: payload.caller_id || null,
       direction: 'outbound',
       status: 'ACCEPTED',
       raw_event_ref: 'click_to_call_support',

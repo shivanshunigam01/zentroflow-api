@@ -84,8 +84,10 @@ export const env = {
   SMARTFLO_CLICK_TO_CALL_API_KEY: process.env.SMARTFLO_CLICK_TO_CALL_API_KEY,
   SMARTFLO_IVR_ID: process.env.SMARTFLO_IVR_ID || '86970',
   SMARTFLO_CLICK_TO_CALL_ENDPOINT: process.env.SMARTFLO_CLICK_TO_CALL_ENDPOINT || '/v1/click_to_call_support',
-  /** Optional DID — format 9180694XXXXX */
+  /** Optional DID — format 9180694XXXXX (required for direct agent /v1/click_to_call) */
   SMARTFLO_CALLER_ID: process.env.SMARTFLO_CALLER_ID,
+  /** Optional DID override for Click-to-Call Support only (leave empty — DID is on the Support API key) */
+  SMARTFLO_CTC_CALLER_ID: process.env.SMARTFLO_CTC_CALLER_ID,
 
   /** Normal / agent Click-to-Call Support API key (API Connect → agent flow) */
   SMARTFLO_AGENT_CALL_API_KEY: process.env.SMARTFLO_AGENT_CALL_API_KEY,
