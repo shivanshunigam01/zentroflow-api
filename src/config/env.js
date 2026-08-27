@@ -23,8 +23,8 @@ export const env = {
   PORT: Number(process.env.PORT || process.env.RAZORPAY_API_PORT || 5000),
   MONGODB_URI: buildMongoUri(),
   API_PREFIX: process.env.API_PREFIX || '/api/v1',
-  /** Comma-separated allowlist used by src/config/cors.js (not "*") */
-  CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  /** Comma-separated allowlist is ignored — CORS allows all origins (see src/config/cors.js) */
+  CORS_ORIGIN: process.env.CORS_ORIGIN || '*',
   JWT_SECRET: process.env.JWT_SECRET || 'change-me-in-production',
   DUPLICATE_WINDOW_DAYS: Number(process.env.DUPLICATE_WINDOW_DAYS || 30),
 
