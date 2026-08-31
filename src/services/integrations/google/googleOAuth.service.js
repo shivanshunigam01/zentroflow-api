@@ -1,10 +1,10 @@
 import { randomUUID } from 'crypto';
-import { env } from '../../config/env.js';
-import OAuthState from '../../models/integrations/OAuthState.js';
-import { getAdapter } from '../../integrations/platformAdapter.js';
-import { writeAuditLog } from '../audit.service.js';
-import { ApiError } from '../../middleware/errorHandler.middleware.js';
-import '../../integrations/google/googleAdapter.js';
+import { env } from '../../../config/env.js';
+import OAuthState from '../../../models/integrations/OAuthState.js';
+import { getAdapter } from '../../../integrations/platformAdapter.js';
+import { writeAuditLog } from '../../audit.service.js';
+import { ApiError } from '../../../middleware/errorHandler.middleware.js';
+import '../../../integrations/google/googleAdapter.js';
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 

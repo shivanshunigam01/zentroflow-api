@@ -1,5 +1,5 @@
-import { asyncHandler } from '../middleware/asyncHandler.middleware.js';
-import { ok } from '../helpers/apiResponse.js';
+import { asyncHandler } from '../../middleware/asyncHandler.middleware.js';
+import { ok } from '../../helpers/apiResponse.js';
 import {
   startMetaOAuth,
   handleMetaOAuthCallback,
@@ -8,21 +8,19 @@ import {
   mapMetaForm,
   disconnectMeta,
   getMetaHealth,
-} from '../services/integrations/meta/metaOAuth.service.js';
+} from '../../services/integrations/meta/metaOAuth.service.js';
 import {
   startGoogleOAuth,
   handleGoogleOAuthCallback,
   getGoogleAccounts,
   disconnectGoogle,
   getGoogleHealth,
-} from '../services/integrations/google/googleOAuth.service.js';
+} from '../../services/integrations/google/googleOAuth.service.js';
 import {
   getIntegrationHealth,
-  getMetaIntegrationHealth,
-  getGoogleIntegrationHealth,
-} from '../services/integrations/integrationHealth.service.js';
-import { verifyMetaWebhookGet, verifyMetaWebhookSignature, processMetaWebhook } from '../services/integrations/meta/metaWebhook.service.js';
-import { listRoutingRules, createRoutingRule } from '../services/integrations/routing.service.js';
+} from '../../services/integrations/integrationHealth.service.js';
+import { verifyMetaWebhookGet, verifyMetaWebhookSignature, processMetaWebhook } from '../../services/integrations/meta/metaWebhook.service.js';
+import { listRoutingRules, createRoutingRule } from '../../services/integrations/routing.service.js';
 
 const ctx = (req, res) => ({
   tenantContext: req.tenantContext,
@@ -30,7 +28,6 @@ const ctx = (req, res) => ({
   ip_address: req.ip,
 });
 
-// --- Meta OAuth (authenticated) ---
 export const metaConnect = asyncHandler(async (req, res) => {
   ok(res, await startMetaOAuth({ tenantContext: req.tenantContext, redirect_after: req.body?.redirect_after }));
 });
@@ -68,7 +65,6 @@ export const metaHealth = asyncHandler(async (req, res) => {
   ok(res, await getMetaHealth(req.tenantContext));
 });
 
-// --- Google OAuth ---
 export const googleConnect = asyncHandler(async (req, res) => {
   ok(res, await startGoogleOAuth({ tenantContext: req.tenantContext, redirect_after: req.body?.redirect_after }));
 });
@@ -96,12 +92,10 @@ export const googleHealth = asyncHandler(async (req, res) => {
   ok(res, await getGoogleHealth(req.tenantContext));
 });
 
-// --- Health ---
 export const integrationsHealth = asyncHandler(async (req, res) => {
   ok(res, await getIntegrationHealth(req.tenantContext));
 });
 
-// --- Webhook (public) ---
 export const metaWebhookVerify = (req, res) => {
   const challenge = verifyMetaWebhookGet(req.query);
   res.status(200).send(challenge);
@@ -114,7 +108,6 @@ export const metaWebhookReceive = asyncHandler(async (req, res) => {
   ok(res, { received: true, ...result });
 });
 
-// --- Routing ---
 export const listRouting = asyncHandler(async (req, res) => {
   ok(res, await listRoutingRules(req.tenantContext));
 });
