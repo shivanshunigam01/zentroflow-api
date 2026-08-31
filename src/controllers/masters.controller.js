@@ -10,8 +10,25 @@ const ensureDefaultRoles = async () => {
   const count = await Role.countDocuments();
   if (count > 0) return;
   await Role.insertMany([
-    { role_id: 'ROLE-SE', name: 'Sales Executive', permissions: ['lead:view', 'lead:edit', 'action:complete'] },
-    { role_id: 'ROLE-SM', name: 'Sales Manager', permissions: ['lead:view', 'lead:edit', 'action:reassign', 'rule:activate'] },
+    {
+      role_id: 'ROLE-SE',
+      name: 'Sales Executive',
+      permissions: ['lead:view', 'lead:edit', 'lead:stage', 'customer:view', 'crm:dashboard:view', 'action:complete'],
+    },
+    {
+      role_id: 'ROLE-SM',
+      name: 'Sales Manager',
+      permissions: [
+        'lead:view',
+        'lead:edit',
+        'lead:stage',
+        'lead:assign',
+        'customer:view',
+        'crm:dashboard:view',
+        'action:reassign',
+        'rule:activate',
+      ],
+    },
     { role_id: 'ROLE-ADMIN', name: 'Super Admin', permissions: ['*'] },
   ]);
 };

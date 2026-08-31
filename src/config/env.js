@@ -67,6 +67,34 @@ export const env = {
   /** Max customers/opportunities returned on GET /bootstrap (inbox sync) */
   BOOTSTRAP_MAX_LEADS: Number(process.env.BOOTSTRAP_MAX_LEADS || 10000),
 
+  /** CRM multi-tenant defaults */
+  DEFAULT_TENANT_ID: process.env.DEFAULT_TENANT_ID || 'zentroverse',
+  DEFAULT_ORGANIZATION_ID: process.env.DEFAULT_ORGANIZATION_ID || 'ORG-DEFAULT',
+
+  /** Queue worker */
+  WORKER_ENABLED: process.env.WORKER_ENABLED !== 'false',
+  QUEUE_POLL_MS: Number(process.env.QUEUE_POLL_MS || 2000),
+  QUEUE_WORKER_CONCURRENCY: Number(process.env.QUEUE_WORKER_CONCURRENCY || 1),
+  QUEUE_MAX_RETRIES: Number(process.env.QUEUE_MAX_RETRIES || 5),
+  QUEUE_RETRY_BACKOFF_MS: Number(process.env.QUEUE_RETRY_BACKOFF_MS || 1000),
+
+  /** Meta Lead Ads */
+  META_APP_ID: process.env.META_APP_ID,
+  META_APP_SECRET: process.env.META_APP_SECRET,
+  META_API_VERSION: process.env.META_API_VERSION || 'v21.0',
+  META_WEBHOOK_VERIFY_TOKEN: process.env.META_WEBHOOK_VERIFY_TOKEN,
+  META_OAUTH_REDIRECT_URI: process.env.META_OAUTH_REDIRECT_URI,
+  META_WEBHOOK_CALLBACK_URL: process.env.META_WEBHOOK_CALLBACK_URL,
+  META_TOKEN_ENCRYPTION_KEY: process.env.META_TOKEN_ENCRYPTION_KEY,
+  META_PIXEL_ID: process.env.META_PIXEL_ID,
+
+  /** Google Ads */
+  GOOGLE_ADS_CLIENT_ID: process.env.GOOGLE_ADS_CLIENT_ID,
+  GOOGLE_ADS_CLIENT_SECRET: process.env.GOOGLE_ADS_CLIENT_SECRET,
+  GOOGLE_ADS_DEVELOPER_TOKEN: process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
+  GOOGLE_ADS_LOGIN_CUSTOMER_ID: process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID,
+  GOOGLE_ADS_OAUTH_REDIRECT_URI: process.env.GOOGLE_ADS_OAUTH_REDIRECT_URI,
+
   /** Tata Smartflo — token is backend-only, never returned to clients */
   SMARTFLO_API_TOKEN: process.env.SMARTFLO_API_TOKEN,
   SMARTFLO_LEAD_LIST_ID: process.env.SMARTFLO_LEAD_LIST_ID,

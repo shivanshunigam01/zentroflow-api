@@ -12,5 +12,17 @@ module.exports = {
         NODE_ENV: 'production',
       },
     },
+    {
+      name: 'zentroflow-queue-worker',
+      script: 'src/workers/queueWorker.js',
+      cwd: __dirname,
+      instances: 1,
+      autorestart: true,
+      max_restarts: 10,
+      env: {
+        NODE_ENV: 'production',
+        WORKER_ENABLED: 'true',
+      },
+    },
   ],
 };

@@ -8,6 +8,7 @@ import { corsOptions } from './config/cors.js';
 import { env } from './config/env.js';
 import { sendHealth, sendRoot } from './helpers/healthHandlers.js';
 import { requestId } from './middleware/requestId.middleware.js';
+import { captureRawBody } from './middleware/rawBody.middleware.js';
 import { errorHandler, notFound } from './middleware/errorHandler.middleware.js';
 
 const app = express();
@@ -25,7 +26,12 @@ app.use(
   }),
 );
 app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, res, buf) => {
+    if (req.originalUrl?.includes('/integrations/meta/webhook')) captureRawBody(req, res, buf);
+  },
+}));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestId);
 

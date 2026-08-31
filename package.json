@@ -7,7 +7,13 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "test:integration": "node --test tests/crm-api.integration.mjs",
+    "migrate:tenant": "node scripts/migrate-tenant-backfill.mjs",
+    "migrate:tenant:dry-run": "node scripts/migrate-tenant-backfill.mjs --dry-run",
+    "migrate:crm": "node scripts/migrate-crm-production.mjs",
+    "migrate:crm:dry-run": "node scripts/migrate-crm-production.mjs --dry-run",
+    "worker": "node src/workers/queueWorker.js"
   },
   "dependencies": {
     "axios": "^1.17.0",

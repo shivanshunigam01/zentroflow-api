@@ -4,6 +4,13 @@ const opportunitySchema = new mongoose.Schema({
   opportunity_id: { type: String, required: true, unique: true, index: true },
   lead_id: { type: String, required: true, unique: true, index: true },
   customer_id: { type: String, required: true, index: true },
+  tenant_id: { type: String, default: null, index: true },
+  organization_id: { type: String, default: null, index: true },
+  dealer_id: { type: String, default: null, index: true },
+  branch_id: { type: String, default: null, index: true },
+  external_lead_id: { type: String, default: null, index: true },
+  external_source_id: { type: String, default: null },
+  received_at: { type: Date, default: null },
   product: { type: String, required: true, trim: true },
   variant: String,
   requirement: String,
@@ -18,6 +25,14 @@ const opportunitySchema = new mongoose.Schema({
   priority: { type: String, enum: ['P1', 'P2', 'P3', 'P4', 'P5'], default: 'P3' },
   lead_score: { type: Number, default: 0 },
   score_classification: { type: String, enum: ['Cold', 'Warm', 'Hot', 'Critical'], default: 'Cold' },
+  temperature: { type: String, enum: ['COLD', 'WARM', 'HOT', 'NURTURE', null], default: null },
+  verification_status: { type: String, enum: ['PENDING', 'VERIFIED', 'INVALID', null], default: null },
+  qualification_status: { type: String, enum: ['PENDING', 'QUALIFIED', 'DISQUALIFIED', null], default: null },
+  duplicate_status: { type: String, enum: ['NEW', 'LIKELY_DUPLICATE', 'CONFIRMED_DUPLICATE', null], default: null },
+  duplicate_group: { type: String, default: null, index: true },
+  linked_opportunity_id: { type: String, default: null, index: true },
+  score_version: { type: Number, default: 1 },
+  score_reasons: { type: [String], default: [] },
   sla: { type: String, required: true, default: '24 hours' },
   sla_due_at: { type: Date, default: () => new Date(Date.now() + 24 * 60 * 60 * 1000) },
   sla_status: { type: String, enum: ['On Track', 'At Risk', 'Breached'], default: 'On Track' },
@@ -27,8 +42,9 @@ const opportunitySchema = new mongoose.Schema({
   campaign: String,
   branch: { type: String, required: true, default: 'Default Branch' },
   last_activity_at: { type: Date, default: Date.now },
-  /** Per-stage manual notes from Lead Detail journey — keyed by micro stage code */
   stage_step_data: { type: mongoose.Schema.Types.Mixed, default: {} },
+  created_by: { type: String, default: null },
+  updated_by: { type: String, default: null },
 
   smartflo_lead_id: { type: String, default: null, index: true },
   smartflo_lead_list_id: { type: String, default: null },
@@ -45,11 +61,21 @@ const opportunitySchema = new mongoose.Schema({
   callback_at: { type: Date, default: null },
   callback_note: { type: String, default: null },
   callback_agent_id: { type: String, default: null },
-  /** Agent dialer disposition form extras */
   dialer_feedback: { type: String, default: null },
   dialer_notes: { type: String, default: null },
   dialer_priority: { type: String, enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT', null], default: null },
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
+
+opportunitySchema.index({ tenant_id: 1, status: 1, created_at: -1 });
+opportunitySchema.index({ tenant_id: 1, current_owner: 1, next_action_date: 1 });
+opportunitySchema.index({ tenant_id: 1, source: 1 });
+opportunitySchema.index({ tenant_id: 1, current_stage: 1 });
+opportunitySchema.index({ tenant_id: 1, dealer_id: 1, branch_id: 1 });
+opportunitySchema.index({ tenant_id: 1, lead_score: -1 });
+opportunitySchema.index({ tenant_id: 1, qualification_status: 1 });
+opportunitySchema.index({ tenant_id: 1, duplicate_status: 1 });
+opportunitySchema.index({ tenant_id: 1, external_lead_id: 1, source: 1 });
+opportunitySchema.index({ tenant_id: 1, created_at: -1 });
 
 opportunitySchema.pre('validate', function validateStage(next) {
   if (this.current_stage && this.lifecycle_stage) return next(new Error('Either current_stage or lifecycle_stage can be set, not both'));

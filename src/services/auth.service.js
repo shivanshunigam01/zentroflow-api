@@ -1,8 +1,10 @@
 import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
 import { env } from '../config/env.js';
+import { DEFAULT_TENANT_ID } from './permission.service.js';
 
 const SALT_ROUNDS = 10;
+const defaultOrg = () => env.DEFAULT_ORGANIZATION_ID || 'ORG-DEFAULT';
 
 export const hashPassword = (plain) => bcrypt.hash(plain, SALT_ROUNDS);
 
@@ -21,6 +23,9 @@ export const createUser = async ({ email, password, name, role = 'user' }) => {
     password_hash,
     name: name?.trim() || normalized.split('@')[0],
     role,
+    role_id: role === 'admin' ? 'ROLE-ADMIN' : 'ROLE-SE',
+    tenant_id: DEFAULT_TENANT_ID(),
+    organization_id: defaultOrg(),
   });
   return { user };
 };
@@ -45,6 +50,11 @@ export const toAuthUser = (doc) => ({
   email: doc.email,
   name: doc.name,
   role: doc.role,
+  role_id: doc.role_id ?? (doc.role === 'admin' ? 'ROLE-ADMIN' : 'ROLE-SE'),
+  tenant_id: doc.tenant_id ?? DEFAULT_TENANT_ID(),
+  organization_id: doc.organization_id ?? defaultOrg(),
+  dealer_id: doc.dealer_id ?? null,
+  branch_id: doc.branch_id ?? null,
 });
 
 /** Create default buddy account if no users exist */

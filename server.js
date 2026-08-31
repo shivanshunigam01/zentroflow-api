@@ -3,6 +3,8 @@ import app from './src/app.js';
 import { connectDB } from './src/config/db.js';
 import { env, validateEnv } from './src/config/env.js';
 import { ensureDefaultUser } from './src/services/auth.service.js';
+import { syncCrmRolePermissions } from './src/services/roleSync.service.js';
+import { ensureDefaultScoreRules } from './src/services/crm/crmScoring.service.js';
 
 /** 10 minutes — large Excel import/validate (nginx must match proxy_read_timeout). */
 const HTTP_TIMEOUT_MS = 600000;
@@ -19,6 +21,8 @@ const startServer = async () => {
 
   try {
     await ensureDefaultUser();
+    await syncCrmRolePermissions();
+    await ensureDefaultScoreRules();
   } catch (error) {
     console.warn('Default user seed skipped:', error.message);
   }
